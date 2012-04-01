@@ -46,7 +46,9 @@ static void power_supply_changed_work(struct work_struct *work)
 
 	power_supply_update_leds(psy);
 
-	kobject_uevent(&psy->dev->kobj, KOBJ_CHANGE);
+	// disable, it's a battery, it's going to change everytime it's
+	// read or polled
+	//kobject_uevent(&psy->dev->kobj, KOBJ_CHANGE);
 }
 
 void power_supply_changed(struct power_supply *psy)
