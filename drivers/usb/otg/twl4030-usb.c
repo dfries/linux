@@ -853,6 +853,7 @@ static int __exit twl4030_usb_remove(struct platform_device *pdev)
 	twl4030_phy_power(twl, 0);
 	regulator_put(twl->usb1v5);
 	regulator_put(twl->usb1v8);
+	regulator_disable(twl->usb3v1);
 	regulator_put(twl->usb3v1);
 
 	otg_set_transceiver(NULL);
