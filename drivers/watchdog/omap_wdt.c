@@ -60,6 +60,7 @@ MODULE_PARM_DESC(nowayout,
 		__MODULE_STRING(WATCHDOG_NOWAYOUT) ")");
 
 
+static void omap_wdt_shutdown(struct platform_device *pdev);
 static unsigned int wdt_trgr_pattern = 0x1234;
 static spinlock_t wdt_lock;
 
@@ -402,6 +403,13 @@ static int __devinit omap_wdt_probe(struct platform_device *pdev)
 	/* disable clocks since we don't need them now */
 	omap_wdt_ick_enable(wdev->mpu_wdt_ick, 0);
 	clk_disable(wdev->mpu_wdt_fck);
+
+	/* This is for development so it doesn't reboot when things aren't
+	 * quite up yet.
+	 */
+	dev_warn(wdev->omap_wdt_miscdev.parent, "%s disabling watchdog\n",
+		__func__);
+	omap_wdt_shutdown(pdev);
 
 	omap_wdt_dev = pdev;
 

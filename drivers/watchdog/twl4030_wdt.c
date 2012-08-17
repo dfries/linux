@@ -47,6 +47,7 @@ MODULE_PARM_DESC(nowayout, "Watchdog cannot be stopped once started "
 #define	TWL4030_WDT_STATE_OPEN_BIT	0x0
 #define TWL4030_WDT_STATE_OPEN		(1 << TWL4030_WDT_STATE_OPEN_BIT)
 #define TWL4030_WDT_STATE_ACTIVE	0x8
+#define KICK_DELAY			10*HZ
 
 static struct platform_device *twl4030_wdt_dev;
 
@@ -54,6 +55,7 @@ struct twl4030_wdt {
 	struct miscdevice	miscdev;
 	int			timer_margin;
 	unsigned long		state;
+	struct delayed_work	kick_work;
 #ifdef TWL4030_WDT_ENABLE_POWEROFF_ON_SUSPEND
 	u8			poweroff_on_suspend;
 #endif
@@ -68,6 +70,14 @@ static int twl4030_wdt_write(unsigned char val)
 static int twl4030_wdt_ping(struct twl4030_wdt *wdt)
 {
 	return twl4030_wdt_write(wdt->timer_margin + 1);
+}
+
+static void twl4030_kernel_kick(struct work_struct *work)
+{
+	struct twl4030_wdt *wdt = container_of(work, struct twl4030_wdt,
+		kick_work.work);
+	twl4030_wdt_ping(wdt);
+	schedule_delayed_work(&wdt->kick_work, KICK_DELAY);
 }
 
 static int twl4030_wdt_enable(struct twl4030_wdt *wdt)
@@ -160,6 +170,7 @@ static int twl4030_wdt_open(struct inode *inode, struct file *file)
 		return -EAGAIN;
 	}
 	file->private_data = wdt;
+	cancel_delayed_work_sync(&wdt->kick_work);
 	return nonseekable_open(inode, file);
 }
 
@@ -247,12 +258,24 @@ static int __devinit twl4030_wdt_probe(struct platform_device *pdev)
 			twl4030_wdt_debugfs, &wdt->poweroff_on_suspend);
 #endif
 	twl4030_wdt_dev = pdev;
+	if(pdev) {
+		pm_message_t unused = {0};
+		twl4030_wdt_suspend(pdev, unused);
+	}
+	/* This is for development so it doesn't reboot when things aren't
+	 * quite up yet.
+	 */
+	dev_warn(wdt->miscdev.parent, "%s disabling watchdog\n", __func__);
+	/* disable didn't seem to work, kick it in the kernel */
+	INIT_DELAYED_WORK(&wdt->kick_work, twl4030_kernel_kick);
+	schedule_delayed_work(&wdt->kick_work, KICK_DELAY);
 	return 0;
 }
 
 static int __devexit twl4030_wdt_remove(struct platform_device *pdev)
 {
 	struct twl4030_wdt *wdt = platform_get_drvdata(pdev);
+	cancel_delayed_work_sync(&wdt->kick_work);
 
 	if (wdt->state & TWL4030_WDT_STATE_ACTIVE)
 		if (twl4030_wdt_disable(wdt))
