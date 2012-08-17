@@ -42,7 +42,6 @@ static inline void rx51_usb_init(void) { }
 extern void rx51_set_charger(int connected);
 extern void rx51_set_wallcharger(int connected);
 extern void rx51_enable_charger_detection(int enable);
-extern void rx51_detect_wallcharger(void *work);
 extern int rx51_with_charger_detection(void);
 
 extern void omap_bt_init(struct omap_bluetooth_config *bt_config);

@@ -159,6 +159,12 @@ void musb_platform_try_idle(struct musb *musb, unsigned long timeout)
 	mod_timer(&musb_idle_timer, timeout);
 }
 
+#ifdef CONFIG_PM
+extern void (*musb_save_ctx_and_suspend_ptr)(struct usb_gadget *gadget,
+	int overwrite);
+extern void (*musb_restore_ctx_and_resume_ptr)(struct usb_gadget *gadget);
+#endif
+
 void musb_platform_enable(struct musb *musb)
 {
 	twl4030_upd_usb_suspended(0);
@@ -288,6 +294,9 @@ int __init musb_platform_init(struct musb *musb)
 	musb->xceiv = x;
 	musb_platform_resume(musb);
 
+	if (!x)
+		return -ENODEV;
+
 	l = omap_readl(OTG_SYSCONFIG);
 	l &= ~ENABLEWAKEUP;	/* disable wakeup */
 	l &= ~NOSTDBY;		/* remove possible nostdby */
@@ -306,6 +315,11 @@ int __init musb_platform_init(struct musb *musb)
 	l = omap_readl(OTG_INTERFSEL);
 	l |= ULPI_12PIN;
 	omap_writel(l, OTG_INTERFSEL);
+
+#ifdef CONFIG_PM
+	musb_save_ctx_and_suspend_ptr = musb_save_ctx_and_suspend;
+	musb_restore_ctx_and_resume_ptr = musb_restore_ctx_and_resume;
+#endif
 
 	pr_debug("HS USB OTG: revision 0x%x, sysconfig 0x%02x, "
 			"sysstatus 0x%x, intrfsel 0x%x, simenable  0x%x\n",
@@ -358,8 +372,8 @@ static int musb_platform_resume(struct musb *musb)
 {
 	u32 l;
 
-	if (!musb->clock)
-		return 0;
+	if (!musb || !musb->xceiv || !musb->clock)
+		return -1;
 
 	if (musb->xceiv->set_suspend)
 		musb->xceiv->set_suspend(musb->xceiv, 0);
@@ -383,12 +397,17 @@ static int musb_platform_resume(struct musb *musb)
 
 int musb_platform_exit(struct musb *musb)
 {
+#ifdef CONFIG_PM
+	musb_save_ctx_and_suspend_ptr = NULL;
+	musb_restore_ctx_and_resume_ptr = NULL;
+#endif
 
 	omap_vbus_power(musb, 0 /*off*/, 1);
 
 	musb_platform_suspend(musb);
 
-	clk_put(musb->clock);
+	if (musb->clock)
+		clk_put(musb->clock);
 	musb->clock = 0;
 
 	return 0;
@@ -445,7 +464,6 @@ void musb_save_ctx_and_suspend(struct usb_gadget *gadget, int overwrite)
 	if (musb->board && musb->board->set_pm_limits)
 		musb->board->set_pm_limits(musb->controller, 0);
 }
-EXPORT_SYMBOL_GPL(musb_save_ctx_and_suspend);
 
 void musb_restore_ctx_and_resume(struct usb_gadget *gadget)
 {
@@ -503,5 +521,4 @@ void musb_restore_ctx_and_resume(struct usb_gadget *gadget)
 	schedule_work(&musb->vbus_work);
 	spin_unlock_irqrestore(&musb->lock, flags);
 }
-EXPORT_SYMBOL_GPL(musb_restore_ctx_and_resume);
 #endif

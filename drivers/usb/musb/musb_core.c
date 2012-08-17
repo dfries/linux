@@ -334,12 +334,12 @@ static int musb_charger_detect(struct musb *musb)
 	return vdat;
 }
 
-void rx51_detect_wallcharger(void *work)
+extern void (*rx51_detect_wallcharger_ptr)(struct work_struct *work);
+static void rx51_detect_wallcharger(struct work_struct *work)
 {
 	if (the_musb)
 		musb_charger_detect(the_musb);
 }
-EXPORT_SYMBOL(rx51_detect_wallcharger);
 
 /*-------------------------------------------------------------------------*/
 
@@ -1182,14 +1182,14 @@ static void musb_generic_disable(struct musb *musb)
 
 }
 
-void musb_emergency_stop(void)
+extern void (*musb_emergency_stop_ptr)(void);
+static void musb_emergency_stop(void)
 {
 	if (!the_musb)
 		return;
 
 	musb_stop(the_musb);
 }
-EXPORT_SYMBOL_GPL(musb_emergency_stop);
 
 /*
  * Make the HDRC stop (disable interrupts, etc.);
@@ -2288,7 +2288,8 @@ static void musb_free(struct musb *musb)
 	}
 
 #ifdef CONFIG_USB_MUSB_OTG
-	put_device(musb->xceiv->dev);
+	if (musb->xceiv)
+		put_device(musb->xceiv->dev);
 #endif
 
 #ifdef CONFIG_USB_MUSB_HDRC_HCD
@@ -2736,6 +2737,7 @@ static struct platform_driver musb_driver = {
 
 static int __init musb_init(void)
 {
+	int result;
 #ifdef CONFIG_USB_MUSB_HDRC_HCD
 	if (usb_disabled())
 		return 0;
@@ -2763,7 +2765,12 @@ static int __init musb_init(void)
 #endif
 		", debug=%d\n",
 		musb_driver_name, musb_debug);
-	return platform_driver_probe(&musb_driver, musb_probe);
+	result = platform_driver_probe(&musb_driver, musb_probe);
+	if (!result) {
+		musb_emergency_stop_ptr=musb_emergency_stop;
+		rx51_detect_wallcharger_ptr=rx51_detect_wallcharger;
+	}
+	return result;
 }
 
 /* make us init after usbcore and before usb
@@ -2779,5 +2786,7 @@ static void __exit musb_cleanup(void)
 		musb_stop(the_musb);
 	}
 	platform_driver_unregister(&musb_driver);
+	musb_emergency_stop_ptr=NULL;
+	rx51_detect_wallcharger_ptr=NULL;
 }
 module_exit(musb_cleanup);

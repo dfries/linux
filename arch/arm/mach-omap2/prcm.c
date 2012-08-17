@@ -131,7 +131,8 @@ EXPORT_SYMBOL(omap_prcm_get_reset_sources);
  * HACK for RX51 boards previous to B3 which
  * doesn't have a reset line to isp1707 transceiver
  */
-extern void musb_emergency_stop(void);
+void (*musb_emergency_stop_ptr)(void);
+EXPORT_SYMBOL_GPL(musb_emergency_stop_ptr);
 
 /* Resets clock rates and reboots the system. Only called from system.h */
 void omap_prcm_arch_reset(char mode)
@@ -156,7 +157,8 @@ void omap_prcm_arch_reset(char mode)
 	 * HACK for RX51 boards previous to B3 which
 	 * doesn't have a reset line to isp1707 transceiver
 	 */
-	musb_emergency_stop();
+	if(musb_emergency_stop_ptr)
+		musb_emergency_stop_ptr();
 
 	prm_set_mod_reg_bits(OMAP_RST_GS, prcm_offs, RM_RSTCTRL);
 }

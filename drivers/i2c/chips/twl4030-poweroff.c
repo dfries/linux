@@ -39,6 +39,7 @@ void twl4030_upd_usb_suspended(u8 suspended)
 {
 	twl4030_usb_suspended = suspended;
 }
+EXPORT_SYMBOL_GPL(twl4030_upd_usb_suspended);
 
 static void twl4030_poweroff(void)
 {

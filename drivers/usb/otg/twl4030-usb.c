@@ -493,8 +493,17 @@ static void twl4030_phy_power(struct twl4030_usb *twl, int on)
 	}
 }
 
-extern void musb_save_ctx_and_suspend(struct usb_gadget *gadget, int overwrite);
-extern void musb_restore_ctx_and_resume(struct usb_gadget *gadget);
+void (*musb_save_ctx_and_suspend_ptr)(struct usb_gadget *gadget, int overwrite);
+void (*musb_restore_ctx_and_resume_ptr)(struct usb_gadget *gadget);
+void (*rx51_detect_wallcharger_ptr)(struct work_struct *work);
+EXPORT_SYMBOL(musb_save_ctx_and_suspend_ptr);
+EXPORT_SYMBOL(musb_restore_ctx_and_resume_ptr);
+EXPORT_SYMBOL(rx51_detect_wallcharger_ptr);
+static void rx51_detect_wallcharger_work(struct work_struct *work)
+{
+	if(rx51_detect_wallcharger_ptr)
+		rx51_detect_wallcharger_ptr(work);
+}
 
 static void twl4030_phy_suspend(struct twl4030_usb *twl, int controller_off)
 {
@@ -505,8 +514,8 @@ static void twl4030_phy_suspend(struct twl4030_usb *twl, int controller_off)
 	if (!controller_off)
 		twl->asleep = 1;
 
-	if (twl->otg.gadget)
-		musb_save_ctx_and_suspend(twl->otg.gadget, 0);
+	if (twl->otg.gadget && musb_save_ctx_and_suspend_ptr)
+		musb_save_ctx_and_suspend_ptr(twl->otg.gadget, 0);
 }
 
 static void twl4030_phy_resume(struct twl4030_usb *twl)
@@ -521,8 +530,8 @@ static void twl4030_phy_resume(struct twl4030_usb *twl)
 		twl4030_i2c_access(twl, 0);
 	twl->asleep = 0;
 
-	if (twl->otg.gadget)
-		musb_restore_ctx_and_resume(twl->otg.gadget);
+	if (twl->otg.gadget && musb_restore_ctx_and_resume_ptr)
+		musb_restore_ctx_and_resume_ptr(twl->otg.gadget);
 }
 
 static int twl4030_usb_ldo_init(struct twl4030_usb *twl)
@@ -781,7 +790,7 @@ static int __init twl4030_usb_probe(struct platform_device *pdev)
 	twl4030_usb_irq(twl->irq, twl);
 
 	if (machine_is_nokia_rx51()) {
-		INIT_DELAYED_WORK(&twl->work, rx51_detect_wallcharger);
+		INIT_DELAYED_WORK(&twl->work, rx51_detect_wallcharger_work);
 		twl->work_inited = 1;
 	}
 
