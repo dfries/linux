@@ -2413,6 +2413,7 @@ bad_config:
 		if (IS_ERR(musb->clock)) {
 			status = PTR_ERR(musb->clock);
 			musb->clock = NULL;
+			pr_info("clock fail\n");
 			goto fail;
 		}
 	}
@@ -2425,10 +2426,13 @@ bad_config:
 	musb->isr = generic_interrupt;
 	status = musb_platform_init(musb);
 
-	if (status < 0)
+	if (status < 0) {
+		pr_info("musb_platform_init fail\n");
 		goto fail;
+	}
 	if (!musb->isr) {
 		status = -ENODEV;
+		pr_info("isr fail\n");
 		goto fail2;
 	}
 
@@ -2454,8 +2458,10 @@ bad_config:
 	status = musb_core_init(plat->config->multipoint
 			? MUSB_CONTROLLER_MHDRC
 			: MUSB_CONTROLLER_HDRC, musb);
-	if (status < 0)
+	if (status < 0) {
+		pr_info("musb_core_init fail\n");
 		goto fail2;
+	}
 
 	/* Init IRQ workqueue before request_irq */
 	INIT_WORK(&musb->irq_work, musb_irq_work);
@@ -2833,6 +2839,7 @@ subsys_initcall(musb_init);
 static void __exit musb_cleanup(void)
 {
 	struct delayed_work *work = twl4030_work_ptr;
+	printk("MUSB %s\n", __func__);
 	musb_emergency_stop_ptr=NULL;
 	rx51_detect_wallcharger_ptr=NULL;
 	if(work)
