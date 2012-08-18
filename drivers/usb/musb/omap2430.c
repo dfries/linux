@@ -294,8 +294,10 @@ int __init musb_platform_init(struct musb *musb)
 	musb->xceiv = x;
 	musb_platform_resume(musb);
 
-	if (!x)
+	if (!x) {
+		pr_debug("no transceiver\n");
 		return -ENODEV;
+	}
 
 	l = omap_readl(OTG_SYSCONFIG);
 	l &= ~ENABLEWAKEUP;	/* disable wakeup */
