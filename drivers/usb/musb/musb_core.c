@@ -1162,10 +1162,12 @@ static void musb_generic_disable(struct musb *musb)
 	u16	temp;
 
 	/* Clocks need to be turned on with OFF-mode */
-	if (musb->set_clock)
-		musb->set_clock(musb->clock, 1);
-	else
-		clk_enable(musb->clock);
+	if (musb->clock) {
+		if (musb->set_clock)
+			musb->set_clock(musb->clock, 1);
+		else
+			clk_enable(musb->clock);
+	}
 
 	/* disable interrupts */
 	musb_writeb(mbase, MUSB_INTRUSBE, 0);
