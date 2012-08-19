@@ -2546,8 +2546,10 @@ fail:
 	dev_err(musb->controller,
 		"musb_init_controller failed with status %d\n", status);
 
-	if (musb->clock)
+	if (musb->clock) {
 		clk_put(musb->clock);
+		musb->clock = NULL;
+	}
 	device_init_wakeup(dev, 0);
 	musb_free(musb);
 
