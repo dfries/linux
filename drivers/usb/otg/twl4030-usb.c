@@ -855,6 +855,8 @@ static int __exit twl4030_usb_remove(struct platform_device *pdev)
 	regulator_put(twl->usb1v8);
 	regulator_put(twl->usb3v1);
 
+	otg_set_transceiver(NULL);
+
 	kfree(twl);
 
 	return 0;
