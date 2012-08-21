@@ -423,6 +423,7 @@ void musb_save_ctx_and_suspend(struct usb_gadget *gadget, int overwrite)
 	unsigned long	flags;
 	unsigned long	tmo;
 
+	mutex_lock(&musb->mutex);
 	spin_lock_irqsave(&musb->lock, flags);
 	if (overwrite)
 		/* Save register context */
@@ -464,6 +465,7 @@ void musb_save_ctx_and_suspend(struct usb_gadget *gadget, int overwrite)
 	/* clear constraints */
 	if (musb->board && musb->board->set_pm_limits)
 		musb->board->set_pm_limits(musb->controller, 0);
+	mutex_unlock(&musb->mutex);
 }
 
 void musb_restore_ctx_and_resume(struct usb_gadget *gadget)
@@ -473,6 +475,7 @@ void musb_restore_ctx_and_resume(struct usb_gadget *gadget)
 	u8 r;
 	unsigned long	flags;
 
+	mutex_lock(&musb->mutex);
 	DBG(3, "restoring register context\n");
 
 	if (musb->board && musb->board->xceiv_power)
@@ -521,5 +524,6 @@ void musb_restore_ctx_and_resume(struct usb_gadget *gadget)
 	/* set constraints */
 	schedule_work(&musb->vbus_work);
 	spin_unlock_irqrestore(&musb->lock, flags);
+	mutex_unlock(&musb->mutex);
 }
 #endif

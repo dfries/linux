@@ -227,6 +227,7 @@ static int musb_charger_detect(struct musb *musb)
 		return 0;
 
 	msleep(5);
+	mutex_lock(&musb->mutex);
 
 	/* Using ulpi with musb is quite tricky. The following code
 	 * was written based on the ulpi application note.
@@ -248,8 +249,13 @@ static int musb_charger_detect(struct musb *musb)
 			r = musb_readb(musb->mregs, MUSB_DEVCTL);
 			if ((r & MUSB_DEVCTL_VBUS)
 					== (3 << MUSB_DEVCTL_VBUS_SHIFT)) {
+				/* unlock as save/restore was racing against
+				 * this function and takes its own lock
+				 */
+				mutex_unlock(&musb->mutex);
 				musb_save_ctx_and_suspend(&musb->g, 0);
 				musb_restore_ctx_and_resume(&musb->g);
+				mutex_lock(&musb->mutex);
 				if (musb->board && musb->board->set_pm_limits)
 					musb->board->set_pm_limits(
 							musb->controller, 1);
@@ -311,8 +317,12 @@ static int musb_charger_detect(struct musb *musb)
 		 * forget this.
 		 */
 		musb_stop(musb);
+
 		/* Regulators off */
+		mutex_unlock(&musb->mutex);
 		otg_set_suspend(musb->xceiv, 1);
+		mutex_lock(&musb->mutex);
+
 		musb->is_charger = 1;
 		if (machine_is_nokia_rx51() && rx51_with_charger_detection())
 			rx51_set_wallcharger(1);
@@ -330,6 +340,7 @@ static int musb_charger_detect(struct musb *musb)
 	}
 
 	check_charger = 0;
+	mutex_unlock(&musb->mutex);
 
 	return vdat;
 }
@@ -2227,6 +2238,7 @@ allocate_instance(struct device *dev,
 
 #endif
 
+	mutex_init(&musb->mutex);
 	musb->mregs = mbase;
 	musb->ctrl_base = mbase;
 	musb->nIrq = -ENODEV;
