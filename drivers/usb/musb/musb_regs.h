@@ -323,6 +323,7 @@ static inline u8 musb_ulpi_readb(void __iomem *addr, u8 offset)
 {
 	int	i = 0;
 	u8	r;
+	static int last = 1;
 
 	musb_writeb(addr, ULPI_REG_ADDR, offset);
 	musb_writeb(addr, ULPI_REG_CONTROL, ULPI_REG_REQ | ULPI_RDN_WR);
@@ -330,7 +331,9 @@ static inline u8 musb_ulpi_readb(void __iomem *addr, u8 offset)
 	while (!(musb_readb(addr, ULPI_REG_CONTROL) & ULPI_REG_CMPLT)) {
 		i++;
 		if (i == 10000) {
-			DBG_nonverb(3, "ULPI read timed out\n");
+			DBG_nonverb(0, "ULPI read timed out  %p %x, pid %u\n",
+				addr, offset, current->pid);
+			last = 1;
 			return 0;
 		}
 
@@ -338,6 +341,12 @@ static inline u8 musb_ulpi_readb(void __iomem *addr, u8 offset)
 	r = musb_readb(addr, ULPI_REG_CONTROL);
 	r &= ~ULPI_REG_CMPLT;
 	musb_writeb(addr, ULPI_REG_CONTROL, r);
+	/* identify the first successful read after a failed read */
+	if(last) {
+		printk(KERN_DEBUG "%s successful read from %p %x\n",
+			__func__, addr, offset);
+		last = 0;
+	}
 
 	return musb_readb(addr, ULPI_REG_DATA);
 }
@@ -347,6 +356,7 @@ static inline void musb_ulpi_writeb(void __iomem *addr,
 {
 	int	i = 0;
 	u8	r = 0;
+	static int last = 1;
 
 	musb_writeb(addr, ULPI_REG_ADDR, offset);
 	musb_writeb(addr, ULPI_REG_DATA, data);
@@ -355,7 +365,9 @@ static inline void musb_ulpi_writeb(void __iomem *addr,
 	while(!(musb_readb(addr, ULPI_REG_CONTROL) & ULPI_REG_CMPLT)) {
 		i++;
 		if (i == 10000) {
-			DBG_nonverb(3, "ULPI write timed out\n");
+			DBG_nonverb(0, "ULPI write timed out %p %x %u\n",
+				addr, offset, current->pid);
+			last = 1;
 			return;
 		}
 	}
@@ -363,6 +375,12 @@ static inline void musb_ulpi_writeb(void __iomem *addr,
 	r = musb_readb(addr, ULPI_REG_CONTROL);
 	r &= ~ULPI_REG_CMPLT;
 	musb_writeb(addr, ULPI_REG_CONTROL, r);
+	/* identify the first successful read after a failed read */
+	if(last) {
+		printk(KERN_DEBUG "%s successful write to %p %x\n",
+			__func__, addr, offset);
+		last = 0;
+	}
 }
 
 static inline void musb_write_txfifosz(void __iomem *mbase, u8 c_size)
