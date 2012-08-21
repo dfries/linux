@@ -236,8 +236,9 @@ static int musb_charger_detect(struct musb *musb)
 	 * change it unless you really know what you're doing
 	 */
 
-	DBG(4, "musb_charger_detect xceive->state %u\n", musb->xceiv->state);
-
+	printk(KERN_DEBUG "%s musb->xceiv->state %d %s, pid %u %s\n",
+		__func__, musb->xceiv->state, otg_state_string(musb),
+		current->pid, current->comm);
 	switch(musb->xceiv->state) {
 		case OTG_STATE_B_IDLE:
 			/* we always reset transceiver */
@@ -249,6 +250,7 @@ static int musb_charger_detect(struct musb *musb)
 			r = musb_readb(musb->mregs, MUSB_DEVCTL);
 			if ((r & MUSB_DEVCTL_VBUS)
 					== (3 << MUSB_DEVCTL_VBUS_SHIFT)) {
+				printk("doing musb suspend/resume\n");
 				/* unlock as save/restore was racing against
 				 * this function and takes its own lock
 				 */
@@ -278,13 +280,16 @@ static int musb_charger_detect(struct musb *musb)
 					r & ~MUSB_POWER_RESUME);
 
 			/* now we set SW control bit in PWR_CTRL register */
+			printk("ulpi set SW control bit\n");
 			musb_ulpi_writeb(musb->mregs, ISP1704_PWR_CTRL,
 					ISP1704_PWR_CTRL_SWCTRL);
 
+			printk("read ulpi PWR_CTRL\n");
 			r = musb_ulpi_readb(musb->mregs, ISP1704_PWR_CTRL);
 			r |= (ISP1704_PWR_CTRL_SWCTRL | ISP1704_PWR_CTRL_DPVSRC_EN);
 
 			/* and finally enable manual charger detection */
+			printk("enable manual charger detection\n");
 			musb_ulpi_writeb(musb->mregs, ISP1704_PWR_CTRL, r);
 			msleep(10);
 
@@ -313,6 +318,7 @@ static int musb_charger_detect(struct musb *musb)
 
 			r &= ~ISP1704_PWR_CTRL_DPVSRC_EN;
 
+			printk("clear DPVSRC_EN\n");
 			/* Clear DPVSRC_EN, otherwise usb communication doesn't work */
 			musb_ulpi_writeb(musb->mregs, ISP1704_PWR_CTRL, r);
 			break;
@@ -322,6 +328,8 @@ static int musb_charger_detect(struct musb *musb)
 			break;
 	}
 
+	printk(KERN_DEBUG "%s vdat %d, pid %d %s\n", __func__, vdat,
+		current->pid, current->comm);
 	if (vdat) {
 		/* REVISIT: This code works only with dedicated chargers!
 		 * When support for HOST/HUB chargers is added, don't

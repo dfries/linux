@@ -436,7 +436,7 @@ void musb_save_ctx_and_suspend(struct usb_gadget *gadget, int overwrite)
 		musb_save_ctx(musb);
 	spin_unlock_irqrestore(&musb->lock, flags);
 
-	DBG(3, "allow sleep\n");
+	DBG(3, "allow sleep, pid %u %s\n", current->pid, current->comm);
 	/* Do soft reset. This needs to be done with broken AUTOIDLE */
 	tmo = jiffies + msecs_to_jiffies(300);
 	omap_writel(SOFTRST, OTG_SYSCONFIG);
