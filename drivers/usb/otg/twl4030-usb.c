@@ -409,6 +409,11 @@ static void twl4030_usb_set_mode(struct twl4030_usb *twl, int mode)
 		twl4030_usb_clear_bits(twl, FUNC_CTRL,
 					FUNC_CTRL_XCVRSELECT_MASK |
 					FUNC_CTRL_OPMODE_MASK);
+	printk(KERN_DEBUG "%s\n", __func__);
+	printk(KERN_DEBUG "IFC_CTRL 0x%x\n", twl4030_usb_read(twl, IFC_CTRL));
+	printk(KERN_DEBUG "POWER_CTRL 0x%x\n", twl4030_usb_read(twl,
+		POWER_CTRL));
+	printk(KERN_DEBUG "FUNC_CTRL 0x%x\n", twl4030_usb_read(twl, FUNC_CTRL));
 		break;
 	case -1:
 		/* FIXME: power on defaults */
@@ -470,6 +475,7 @@ static void twl4030_phy_power(struct twl4030_usb *twl, int on)
 {
 	u8 pwr;
 
+	printk(KERN_DEBUG "%s on %d\n", __func__, on);
 	pwr = twl4030_usb_read(twl, PHY_PWR_CTRL);
 	if (on) {
 		twl4030_usb3v1_sleep(false);
@@ -516,6 +522,9 @@ static void twl4030_phy_suspend(struct twl4030_usb *twl, int controller_off)
 {
 	struct musb *musb = musb_restore_ctx_and_resume_ptr && twl->otg.gadget ?
 		gadget_to_musb(twl->otg.gadget) : NULL;
+	printk(KERN_DEBUG "%s twl->otg.gadget %p\n", __func__, twl->otg.gadget);
+	printk(KERN_DEBUG "%s asleep %d %s controller_off %d\n", __func__,
+		twl->asleep, twl->asleep ? "skip" : "set", controller_off);
 
 	if(musb)
 		mutex_lock(&musb->mutex);
@@ -528,6 +537,9 @@ static void twl4030_phy_suspend(struct twl4030_usb *twl, int controller_off)
 	if(musb)
 		mutex_unlock(&musb->mutex);
 
+	printk(KERN_DEBUG "%s twl->otg.gadget %p "
+		"musb_save_ctx_and_suspend_ptr %p\n", __func__, twl->otg.gadget,
+		musb_save_ctx_and_suspend_ptr);
 	if (twl->otg.gadget && musb_save_ctx_and_suspend_ptr)
 		musb_save_ctx_and_suspend_ptr(twl->otg.gadget, 0);
 }
@@ -536,6 +548,7 @@ static void twl4030_phy_resume(struct twl4030_usb *twl)
 {
 	struct musb *musb = musb_restore_ctx_and_resume_ptr && twl->otg.gadget ?
 		gadget_to_musb(twl->otg.gadget) : NULL;
+	printk(KERN_DEBUG "%s twl->otg.gadget %p\n", __func__, twl->otg.gadget);
 
 	if(musb)
 		mutex_lock(&musb->mutex);
@@ -558,6 +571,11 @@ static void twl4030_phy_resume(struct twl4030_usb *twl)
 
 static int twl4030_usb_ldo_init(struct twl4030_usb *twl)
 {
+	printk(KERN_DEBUG "%s\n", __func__);
+	printk(KERN_DEBUG "IFC_CTRL 0x%x\n", twl4030_usb_read(twl, IFC_CTRL));
+	printk(KERN_DEBUG "POWER_CTRL 0x%x\n", twl4030_usb_read(twl,
+		POWER_CTRL));
+	printk(KERN_DEBUG "FUNC_CTRL 0x%x\n", twl4030_usb_read(twl, FUNC_CTRL));
 	/* Enable writing to power configuration registers */
 	twl4030_i2c_write_u8(TWL4030_MODULE_PM_MASTER, 0xC0, PROTECT_KEY);
 	twl4030_i2c_write_u8(TWL4030_MODULE_PM_MASTER, 0x0C, PROTECT_KEY);
@@ -700,6 +718,7 @@ static int twl4030_set_suspend(struct otg_transceiver *x, int suspend)
 {
 	struct twl4030_usb *twl = xceiv_to_twl(x);
 
+	printk("%s suspend %d\n", __func__, suspend);
 	if (suspend)
 		twl4030_phy_suspend(twl, 1);
 	else
@@ -717,6 +736,8 @@ static int twl4030_set_peripheral(struct otg_transceiver *x,
 		return -ENODEV;
 
 	twl = xceiv_to_twl(x);
+	printk(KERN_DEBUG "%s gadget was %p now %p\n", __func__,
+		twl->otg.gadget, gadget);
 	twl->otg.gadget = gadget;
 	if (!gadget)
 		twl->otg.state = OTG_STATE_UNDEFINED;
@@ -855,6 +876,7 @@ static int __exit twl4030_usb_remove(struct platform_device *pdev)
 	}
 
 	twl4030_phy_power(twl, 0);
+	printk(KERN_INFO "regulator_put usb1v5 usb1v8 usb3v1\n");
 	regulator_put(twl->usb1v5);
 	regulator_put(twl->usb1v8);
 	regulator_disable(twl->usb3v1);
