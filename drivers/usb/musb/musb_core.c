@@ -291,10 +291,21 @@ static int musb_charger_detect(struct musb *musb)
 			timeout = jiffies + msecs_to_jiffies(300);
 			while (!time_after(jiffies, timeout)) {
 				/* Check if there is a charger */
-				vdat = !!(musb_ulpi_readb(musb->mregs, ISP1704_PWR_CTRL)
+				u8 val = musb_ulpi_readb(musb->mregs, ISP1704_PWR_CTRL)
+							& ISP1704_PWR_CTRL_VDAT_DET;
+				vdat = !!(val);
+				printk("read ulpi for charger val %x\n", val);
+				if (vdat) {
+					int i;
+					for(i=0; i<10; ++i) {
+						printk(KERN_DEBUG "charger val %x\n",
+						musb_ulpi_readb(musb->mregs,
+							ISP1704_PWR_CTRL)
 							& ISP1704_PWR_CTRL_VDAT_DET);
-				if (vdat)
+						msleep(5);
+					}
 					break;
+				}
 				msleep(1);
 			}
 			if (vdat)
