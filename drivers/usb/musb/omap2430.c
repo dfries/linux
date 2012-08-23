@@ -409,6 +409,7 @@ int musb_platform_exit(struct musb *musb)
 	if (musb->clock)
 		clk_put(musb->clock);
 	musb->clock = 0;
+	otg_set_peripheral(musb->xceiv, NULL);
 
 	return 0;
 }
