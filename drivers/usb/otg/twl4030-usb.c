@@ -36,6 +36,7 @@
 #include <linux/i2c/twl4030.h>
 #include <linux/regulator/consumer.h>
 #include <linux/err.h>
+#include "../musb/musb_core.h"
 
 #include <asm/mach-types.h>
 #include <mach/board-rx51.h>
@@ -507,12 +508,21 @@ static void rx51_detect_wallcharger_work(struct work_struct *work)
 
 static void twl4030_phy_suspend(struct twl4030_usb *twl, int controller_off)
 {
+	struct musb *musb = musb_restore_ctx_and_resume_ptr && twl->otg.gadget ?
+		gadget_to_musb(twl->otg.gadget) : NULL;
+
 	if (twl->asleep)
 		return;
+
+	if(musb)
+		mutex_lock(&musb->mutex);
 
 	twl4030_phy_power(twl, 0);
 	if (!controller_off)
 		twl->asleep = 1;
+
+	if(musb)
+		mutex_unlock(&musb->mutex);
 
 	if (twl->otg.gadget && musb_save_ctx_and_suspend_ptr)
 		musb_save_ctx_and_suspend_ptr(twl->otg.gadget, 0);
@@ -520,8 +530,14 @@ static void twl4030_phy_suspend(struct twl4030_usb *twl, int controller_off)
 
 static void twl4030_phy_resume(struct twl4030_usb *twl)
 {
+	struct musb *musb = musb_restore_ctx_and_resume_ptr && twl->otg.gadget ?
+		gadget_to_musb(twl->otg.gadget) : NULL;
+
 	if (!twl->asleep)
 		return;
+
+	if(musb)
+		mutex_lock(&musb->mutex);
 
 	twl4030_phy_power(twl, 1);
 	twl4030_i2c_access(twl, 1);
@@ -529,6 +545,9 @@ static void twl4030_phy_resume(struct twl4030_usb *twl)
 	if (twl->usb_mode == T2_USB_MODE_ULPI)
 		twl4030_i2c_access(twl, 0);
 	twl->asleep = 0;
+
+	if(musb)
+		mutex_unlock(&musb->mutex);
 
 	if (twl->otg.gadget && musb_restore_ctx_and_resume_ptr)
 		musb_restore_ctx_and_resume_ptr(twl->otg.gadget);
