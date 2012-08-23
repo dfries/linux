@@ -1656,7 +1656,7 @@ static int __init musb_core_init(u16 musb_type, struct musb *musb)
 #ifdef MUSB_AHB_ID
 	u32 data;
 #endif
-	u8 reg;
+	u8 reg, power;
 	char *type;
 	u16 hwvers, rev_major, rev_minor;
 	char aInfo[78], aRevision[32], aDate[12];
@@ -1666,7 +1666,22 @@ static int __init musb_core_init(u16 musb_type, struct musb *musb)
 
 	/* log core options (read using indexed model) */
 	musb_ep_select(mbase, 0);
+
+	printk(KERN_DEBUG "config data %x\n", musb_read_configdata(mbase));
+	power = musb_readb(mbase, MUSB_POWER);
+	musb_writeb(mbase, MUSB_POWER,	power | MUSB_POWER_RESET);
+	msleep(10);
+	musb_writeb(mbase, MUSB_POWER,	power & ~MUSB_POWER_RESET);
+	musb_ep_select(mbase, 0);
+
 	reg = musb_read_configdata(mbase);
+	// hack remove definitely, for some reason it was reading 0x33
+	// setting this once cleared it
+	if(reg == 0x33) {
+		reg = 0xde;
+		// should find out what makes it be a good reading again
+		printk("hack ConfigData to %x\n", reg);
+	}
 
 	strcpy(aInfo, (reg & MUSB_CONFIGDATA_UTMIDW) ? "UTMI-16" : "UTMI-8");
 	if (reg & MUSB_CONFIGDATA_DYNFIFO)
@@ -1739,8 +1754,10 @@ static int __init musb_core_init(u16 musb_type, struct musb *musb)
 	printk(KERN_DEBUG "%s: %sHDRC RTL version %s %s\n",
 			musb_driver_name, type, aRevision, aDate);
 
+printk(KERN_DEBUG "config data %x\n", musb_read_configdata(mbase));
 	/* configure ep0 */
 	musb_configure_ep0(musb);
+printk(KERN_DEBUG "config data %x\n", musb_read_configdata(mbase));
 
 	/* discover endpoint configuration */
 	musb->nr_endpoints = 1;
@@ -1813,6 +1830,9 @@ static int __init musb_core_init(u16 musb_type, struct musb *musb)
 		if (!(hw_ep->max_packet_sz_tx || hw_ep->max_packet_sz_rx))
 			DBG(1, "hw_ep %d not configured\n", i);
 	}
+printk(KERN_DEBUG "config data %x\n", musb_read_configdata(mbase));
+	musb_ep_select(mbase, 0);
+printk(KERN_DEBUG "config data %x\n", musb_read_configdata(mbase));
 
 	return 0;
 }
