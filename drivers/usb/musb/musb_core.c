@@ -219,6 +219,7 @@ static int check_charger;
 static int musb_charger_detect(struct musb *musb)
 {
 	unsigned long	timeout;
+	int test;
 
 	u8              vdat = 0;
 	u8              r;
@@ -281,8 +282,25 @@ static int musb_charger_detect(struct musb *musb)
 
 			/* now we set SW control bit in PWR_CTRL register */
 			printk("ulpi set SW control bit\n");
-			musb_ulpi_writeb(musb->mregs, ISP1704_PWR_CTRL,
+			test = musb_ulpi_writeb(musb->mregs, ISP1704_PWR_CTRL,
 					ISP1704_PWR_CTRL_SWCTRL);
+			if(test) {
+				#if 0
+				printk("write failed, try suspend/resume\n");
+				/* unlock as save/restore was racing against
+				 * this function and takes its own lock
+				 */
+				mutex_unlock(&musb->mutex);
+				musb_save_ctx_and_suspend(&musb->g, 0);
+				musb_restore_ctx_and_resume(&musb->g);
+				mutex_lock(&musb->mutex);
+				if (musb->board && musb->board->set_pm_limits)
+					musb->board->set_pm_limits(
+							musb->controller, 1);
+				#endif
+				printk("write failed, try restore_ctx\n");
+				musb_restore_ctx(musb);
+			}
 
 			printk("read ulpi PWR_CTRL\n");
 			r = musb_ulpi_readb(musb->mregs, ISP1704_PWR_CTRL);
