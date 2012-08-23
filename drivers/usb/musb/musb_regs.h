@@ -325,6 +325,14 @@ static inline u8 musb_ulpi_readb(void __iomem *addr, u8 offset)
 	u8	r;
 	static int last = 1;
 
+	/* Make sure the transceiver is not in low power mode */
+	u8 power;
+	power = musb_readb(addr, MUSB_POWER);
+	if(power & MUSB_POWER_SUSPENDM) {
+		DBG_nonverb(2, "disable power suspend\n");
+		musb_writeb(addr, MUSB_POWER, power & ~MUSB_POWER_SUSPENDM);
+	}
+
 	musb_writeb(addr, ULPI_REG_ADDR, offset);
 	musb_writeb(addr, ULPI_REG_CONTROL, ULPI_REG_REQ | ULPI_RDN_WR);
 
@@ -348,15 +356,28 @@ static inline u8 musb_ulpi_readb(void __iomem *addr, u8 offset)
 		last = 0;
 	}
 
-	return musb_readb(addr, ULPI_REG_DATA);
+	r = musb_readb(addr, ULPI_REG_DATA);
+	/*
+	if(power & MUSB_POWER_SUSPENDM)
+		musb_writeb(addr, MUSB_POWER, power);
+	*/
+	return r;
 }
 
-static inline void musb_ulpi_writeb(void __iomem *addr,
+static inline int musb_ulpi_writeb(void __iomem *addr,
 	u8 offset, u8 data)
 {
 	int	i = 0;
 	u8	r = 0;
 	static int last = 1;
+
+	/* Make sure the transceiver is not in low power mode */
+	u8 power;
+	power = musb_readb(addr, MUSB_POWER);
+	if(power & MUSB_POWER_SUSPENDM) {
+		DBG_nonverb(2, "disable power suspend\n");
+		musb_writeb(addr, MUSB_POWER, power & ~MUSB_POWER_SUSPENDM);
+	}
 
 	musb_writeb(addr, ULPI_REG_ADDR, offset);
 	musb_writeb(addr, ULPI_REG_DATA, data);
@@ -368,7 +389,7 @@ static inline void musb_ulpi_writeb(void __iomem *addr,
 			DBG_nonverb(0, "ULPI write timed out %p %x %u\n",
 				addr, offset, current->pid);
 			last = 1;
-			return;
+			return -1;
 		}
 	}
 
@@ -381,6 +402,11 @@ static inline void musb_ulpi_writeb(void __iomem *addr,
 			__func__, addr, offset);
 		last = 0;
 	}
+	/*
+	if(power & MUSB_POWER_SUSPENDM)
+		musb_writeb(addr, MUSB_POWER, power);
+	*/
+	return 0;
 }
 
 static inline void musb_write_txfifosz(void __iomem *mbase, u8 c_size)
