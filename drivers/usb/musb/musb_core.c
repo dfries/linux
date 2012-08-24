@@ -125,7 +125,7 @@ static int __initdata use_dma;
 module_param(use_dma, bool, 0);
 MODULE_PARM_DESC(use_dma, "enable/disable use of DMA");
 
-unsigned musb_debug = 0;
+unsigned musb_debug = 3;
 module_param_named(debug, musb_debug, uint, S_IRUGO | S_IWUSR);
 MODULE_PARM_DESC(debug, "Debug message level. Default = 0");
 
