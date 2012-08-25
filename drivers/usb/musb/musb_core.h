@@ -117,6 +117,7 @@ extern void musb_g_suspend(struct musb *);
 extern void musb_g_resume(struct musb *);
 extern void musb_g_wakeup(struct musb *);
 extern void musb_g_disconnect(struct musb *);
+extern void musb_pullup(struct musb *musb, int is_on);
 
 #else
 

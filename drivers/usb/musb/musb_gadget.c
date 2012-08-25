@@ -1393,7 +1393,7 @@ musb_gadget_set_self_powered(struct usb_gadget *gadget, int is_selfpowered)
 	return 0;
 }
 
-static void musb_pullup(struct musb *musb, int is_on)
+void musb_pullup(struct musb *musb, int is_on)
 {
 	u8 power;
 
@@ -1435,7 +1435,8 @@ static void musb_pullup(struct musb *musb, int is_on)
 	/* FIXME if on, HdrcStart; if off, HdrcStop */
 
 	DBG(3, "gadget %s D+ pullup %s\n",
-		musb->gadget_driver->function, is_on ? "on" : "off");
+		musb->gadget_driver ? musb->gadget_driver->function : NULL,
+		is_on ? "on" : "off");
 	musb_writeb(musb->mregs, MUSB_POWER, power);
 }
 

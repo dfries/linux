@@ -2651,8 +2651,6 @@ static int musb_suspend(struct platform_device *pdev, pm_message_t message)
 	unsigned long	flags;
 	struct musb	*musb = dev_to_musb(&pdev->dev);
 
-	if (!musb->clock)
-		return 0;
 
 	spin_lock_irqsave(&musb->lock, flags);
 
@@ -2674,12 +2672,18 @@ static int musb_suspend(struct platform_device *pdev, pm_message_t message)
 	 * musb_save_ctx(musb);
 	 */
 
-	if (musb->set_clock)
-		musb->set_clock(musb->clock, 0);
-	else
-		clk_disable(musb->clock);
+	if (!musb->clock) {
+		if (musb->set_clock)
+			musb->set_clock(musb->clock, 0);
+		else
+			clk_disable(musb->clock);
+	}
 
 	spin_unlock_irqrestore(&musb->lock, flags);
+
+	musb_hnp_stop(musb);
+	musb_pullup(musb, 0);
+	musb_stop(musb);
 	return 0;
 }
 
@@ -2688,15 +2692,15 @@ static int musb_resume(struct platform_device *pdev)
 	unsigned long	flags;
 	struct musb	*musb = dev_to_musb(&pdev->dev);
 
-	if (!musb->clock)
-		return 0;
 
 	spin_lock_irqsave(&musb->lock, flags);
 
-	if (musb->set_clock)
-		musb->set_clock(musb->clock, 1);
-	else
-		clk_enable(musb->clock);
+	if (!musb->clock) {
+		if (musb->set_clock)
+			musb->set_clock(musb->clock, 1);
+		else
+			clk_enable(musb->clock);
+	}
 
 	/* restore context */
 	musb_restore_ctx(musb);
@@ -2706,6 +2710,8 @@ static int musb_resume(struct platform_device *pdev)
 	 * not treating that as a whole-system restart (e.g. swsusp)
 	 */
 	spin_unlock_irqrestore(&musb->lock, flags);
+	if(musb->xceiv && musb->xceiv->gadget)
+		musb_start(musb);
 	return 0;
 }
 
@@ -2767,6 +2773,11 @@ subsys_initcall(musb_init);
 
 static void __exit musb_cleanup(void)
 {
+	if(the_musb) {
+		musb_hnp_stop(the_musb);
+		musb_pullup(the_musb, 0);
+		musb_stop(the_musb);
+	}
 	platform_driver_unregister(&musb_driver);
 }
 module_exit(musb_cleanup);
