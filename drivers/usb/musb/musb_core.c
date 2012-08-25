@@ -2297,6 +2297,7 @@ static void musb_free(struct musb *musb)
 #else
 	kfree(musb);
 #endif
+	the_musb = NULL;
 }
 
 /*
