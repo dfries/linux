@@ -2666,16 +2666,29 @@ static int __devexit musb_remove(struct platform_device *pdev)
 
 void musb_save_ctx(struct musb *musb)
 {
+	printk("%s old POWER %x INTRTXE %x INTRRXE %x INTRUSBE %x DEVCTL %x\n",
+		__func__, ctx.power, ctx.intrtxe, ctx.intrrxe, ctx.intrusbe,
+		ctx.devctl);
 	ctx.power = musb_readb(musb->mregs, MUSB_POWER);
 	ctx.intrtxe = musb_readw(musb->mregs, MUSB_INTRTXE);
 	ctx.intrrxe = musb_readw(musb->mregs, MUSB_INTRRXE);
 	ctx.intrusbe = musb_readb(musb->mregs, MUSB_INTRUSBE);
 	ctx.devctl = musb_readb(musb->mregs, MUSB_DEVCTL);
+	printk("%s new POWER %x INTRTXE %x INTRRXE %x INTRUSBE %x DEVCTL %x\n",
+		__func__, ctx.power, ctx.intrtxe, ctx.intrrxe, ctx.intrusbe,
+		ctx.devctl);
 }
 
 void musb_restore_ctx(struct musb *musb)
 {
 	int i;
+	printk("%s POWER %x INTRTXE %x INTRRXE %x INTRUSBE %x DEVCTL %x\n",
+		__func__,
+		musb_readb(musb->mregs, MUSB_POWER),
+		musb_readb(musb->mregs, MUSB_INTRTXE),
+		musb_readb(musb->mregs, MUSB_INTRRXE),
+		musb_readb(musb->mregs, MUSB_INTRUSBE),
+		musb_readb(musb->mregs, MUSB_DEVCTL));
 	musb_writeb(musb->mregs, MUSB_POWER, ctx.power);
 	musb_writew(musb->mregs, MUSB_INTRTX, 0x00);
 	musb_writew(musb->mregs, MUSB_INTRTXE, ctx.intrtxe);
@@ -2703,6 +2716,8 @@ static int musb_suspend(struct platform_device *pdev, pm_message_t message)
 
 	printk(KERN_DEBUG "%s musb->xceiv->gadget %p\n", __func__,
 		musb->xceiv ? musb->xceiv->gadget : NULL);
+	printk("saved POWER %x INTRTXE %x INTRRXE %x INTRUSBE %x DEVCTL %x\n",
+		ctx.power, ctx.intrtxe, ctx.intrrxe, ctx.intrusbe, ctx.devctl);
 
 	spin_lock_irqsave(&musb->lock, flags);
 
