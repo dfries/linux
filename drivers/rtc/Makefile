@@ -7,7 +7,7 @@ ifeq ($(CONFIG_RTC_DEBUG),y)
 endif
 
 obj-$(CONFIG_RTC_LIB)		+= rtc-lib.o
-obj-$(CONFIG_RTC_HCTOSYS)	+= hctosys.o
+obj-$(CONFIG_RTC_HCTOSYS_BOOT)	+= hctosys.o
 obj-$(CONFIG_RTC_CLASS)		+= rtc-core.o
 rtc-core-y			:= class.o interface.o
 
