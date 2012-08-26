@@ -95,7 +95,12 @@ void getnstimeofday(struct timespec *ts)
 	unsigned long seq;
 	s64 nsecs;
 
+	/* pm_dbg_update_time calls getnstimeofday when timekeeping is
+	 * suspended, disable it
+	 */
+	/*
 	WARN_ON(timekeeping_suspended);
+	*/
 
 	do {
 		seq = read_seqbegin(&xtime_lock);
