@@ -402,6 +402,10 @@ int musb_platform_exit(struct musb *musb)
 	musb_restore_ctx_and_resume_ptr = NULL;
 #endif
 
+	if(timer_pending(&musb_idle_timer)) {
+		pr_debug("%s: musb_idle_timer pending, deleting\n", __func__);
+		del_timer_sync(&musb_idle_timer);
+	}
 	omap_vbus_power(musb, 0 /*off*/, 1);
 
 	musb_platform_suspend(musb);
