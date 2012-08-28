@@ -497,9 +497,15 @@ static void twl4030_phy_power(struct twl4030_usb *twl, int on)
 void (*musb_save_ctx_and_suspend_ptr)(struct usb_gadget *gadget, int overwrite);
 void (*musb_restore_ctx_and_resume_ptr)(struct usb_gadget *gadget);
 void (*rx51_detect_wallcharger_ptr)(struct work_struct *work);
+/* Used for cancel_delayed_work_sync to make sure it isn't running in the
+ * rx51_detect_wallcharger_ptr, this also means there can only be one
+ * twl4030_usb active.
+ */
+struct delayed_work *twl4030_work_ptr;
 EXPORT_SYMBOL(musb_save_ctx_and_suspend_ptr);
 EXPORT_SYMBOL(musb_restore_ctx_and_resume_ptr);
 EXPORT_SYMBOL(rx51_detect_wallcharger_ptr);
+EXPORT_SYMBOL(twl4030_work_ptr);
 static void rx51_detect_wallcharger_work(struct work_struct *work)
 {
 	if(rx51_detect_wallcharger_ptr)
@@ -810,6 +816,7 @@ static int __init twl4030_usb_probe(struct platform_device *pdev)
 
 	if (machine_is_nokia_rx51()) {
 		INIT_DELAYED_WORK(&twl->work, rx51_detect_wallcharger_work);
+		twl4030_work_ptr = &twl->work;
 		twl->work_inited = 1;
 	}
 
@@ -823,6 +830,7 @@ static int __exit twl4030_usb_remove(struct platform_device *pdev)
 	int val;
 
 	cancel_delayed_work_sync(&twl->work);
+	twl4030_work_ptr = NULL;
 
 	free_irq(twl->irq, twl);
 	device_remove_file(twl->dev, &dev_attr_vbus);

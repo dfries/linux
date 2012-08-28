@@ -350,6 +350,7 @@ static int musb_charger_detect(struct musb *musb)
 }
 
 extern void (*rx51_detect_wallcharger_ptr)(struct work_struct *work);
+extern struct delayed_work *twl4030_work_ptr;
 static void rx51_detect_wallcharger(struct work_struct *work)
 {
 	if (the_musb)
@@ -2801,6 +2802,11 @@ subsys_initcall(musb_init);
 
 static void __exit musb_cleanup(void)
 {
+	struct delayed_work *work = twl4030_work_ptr;
+	musb_emergency_stop_ptr=NULL;
+	rx51_detect_wallcharger_ptr=NULL;
+	if(work)
+		cancel_delayed_work_sync(work);
 	if(the_musb) {
 		musb_hnp_stop(the_musb);
 		musb_pullup(the_musb, 0);
@@ -2808,7 +2814,5 @@ static void __exit musb_cleanup(void)
 		cancel_work_sync(&the_musb->irq_work);
 	}
 	platform_driver_unregister(&musb_driver);
-	musb_emergency_stop_ptr=NULL;
-	rx51_detect_wallcharger_ptr=NULL;
 }
 module_exit(musb_cleanup);
