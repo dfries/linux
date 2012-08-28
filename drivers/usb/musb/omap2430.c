@@ -406,6 +406,8 @@ int musb_platform_exit(struct musb *musb)
 		pr_debug("%s: musb_idle_timer pending, deleting\n", __func__);
 		del_timer_sync(&musb_idle_timer);
 	}
+	cancel_work_sync(&musb->vbus_work);
+
 	omap_vbus_power(musb, 0 /*off*/, 1);
 
 	musb_platform_suspend(musb);

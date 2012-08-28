@@ -2805,6 +2805,7 @@ static void __exit musb_cleanup(void)
 		musb_hnp_stop(the_musb);
 		musb_pullup(the_musb, 0);
 		musb_stop(the_musb);
+		cancel_work_sync(&the_musb->irq_work);
 	}
 	platform_driver_unregister(&musb_driver);
 	musb_emergency_stop_ptr=NULL;

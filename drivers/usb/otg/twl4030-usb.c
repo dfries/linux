@@ -822,6 +822,8 @@ static int __exit twl4030_usb_remove(struct platform_device *pdev)
 	struct twl4030_usb *twl = platform_get_drvdata(pdev);
 	int val;
 
+	cancel_delayed_work_sync(&twl->work);
+
 	free_irq(twl->irq, twl);
 	device_remove_file(twl->dev, &dev_attr_vbus);
 	device_remove_file(twl->dev, &dev_attr_linkstat);
