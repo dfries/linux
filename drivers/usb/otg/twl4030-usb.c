@@ -473,6 +473,10 @@ static void twl4030_phy_power(struct twl4030_usb *twl, int on)
 	if (on) {
 		twl4030_usb3v1_sleep(false);
 		regulator_enable(twl->usb1v8);
+		/* recommened 10 to 20 usec delay to "avoid simultaneous large
+		 * incrush current" or 450 mA*2*4.5 V = 4.05 W for 2 usec
+		 */
+		udelay(20);
 		regulator_enable(twl->usb1v5);
 		pwr &= ~PHY_PWR_PHYPWD;
 		WARN_ON(twl4030_usb_write_verify(twl, PHY_PWR_CTRL, pwr) < 0);
