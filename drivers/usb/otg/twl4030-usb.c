@@ -304,7 +304,7 @@ static int twl4030_i2c_write_u8_verify(struct twl4030_usb *twl,
 #define twl4030_usb_write_verify(twl, address, data)	\
 	twl4030_i2c_write_u8_verify(twl, TWL4030_MODULE_USB, (data), (address))
 
-static inline int twl4030_usb_write(struct twl4030_usb *twl,
+int twl4030_usb_write(struct twl4030_usb *twl,
 		u8 address, u8 data)
 {
 	int ret = 0;
@@ -315,6 +315,7 @@ static inline int twl4030_usb_write(struct twl4030_usb *twl,
 			"TWL4030:USB:Write[0x%x] Error %d\n", address, ret);
 	return ret;
 }
+EXPORT_SYMBOL(twl4030_usb_write);
 
 static inline int twl4030_readb(struct twl4030_usb *twl, u8 module, u8 address)
 {
@@ -332,10 +333,11 @@ static inline int twl4030_readb(struct twl4030_usb *twl, u8 module, u8 address)
 	return ret;
 }
 
-static inline int twl4030_usb_read(struct twl4030_usb *twl, u8 address)
+int twl4030_usb_read(struct twl4030_usb *twl, u8 address)
 {
 	return twl4030_readb(twl, TWL4030_MODULE_USB, address);
 }
+EXPORT_SYMBOL(twl4030_usb_read);
 
 /*-------------------------------------------------------------------------*/
 
@@ -345,11 +347,12 @@ twl4030_usb_set_bits(struct twl4030_usb *twl, u8 reg, u8 bits)
 	return twl4030_usb_write(twl, reg + 1, bits);
 }
 
-static inline int
+int
 twl4030_usb_clear_bits(struct twl4030_usb *twl, u8 reg, u8 bits)
 {
 	return twl4030_usb_write(twl, reg + 2, bits);
 }
+EXPORT_SYMBOL(twl4030_usb_clear_bits);
 
 /*-------------------------------------------------------------------------*/
 
@@ -399,7 +402,7 @@ static enum linkstat twl4030_usb_linkstat(struct twl4030_usb *twl)
 	return linkstat;
 }
 
-static void twl4030_usb_set_mode(struct twl4030_usb *twl, int mode)
+void twl4030_usb_set_mode(struct twl4030_usb *twl, int mode)
 {
 	twl->usb_mode = mode;
 
@@ -425,6 +428,7 @@ static void twl4030_usb_set_mode(struct twl4030_usb *twl, int mode)
 		break;
 	};
 }
+EXPORT_SYMBOL(twl4030_usb_set_mode);
 
 static void twl4030_i2c_access(struct twl4030_usb *twl, int on)
 {
@@ -472,7 +476,7 @@ static void twl4030_usb3v1_sleep(int sleep)
 				VUSB_DEDICATED2);
 }
 
-static void twl4030_phy_power(struct twl4030_usb *twl, int on)
+void twl4030_phy_power(struct twl4030_usb *twl, int on)
 {
 	u8 pwr;
 
@@ -500,6 +504,7 @@ static void twl4030_phy_power(struct twl4030_usb *twl, int on)
 		twl4030_usb3v1_sleep(true);
 	}
 }
+EXPORT_SYMBOL(twl4030_phy_power);
 
 void (*musb_save_ctx_and_suspend_ptr)(struct usb_gadget *gadget, int overwrite);
 void (*musb_restore_ctx_and_resume_ptr)(struct usb_gadget *gadget);
@@ -715,7 +720,7 @@ static irqreturn_t twl4030_usb_irq(int irq, void *_twl)
 	return IRQ_HANDLED;
 }
 
-static int twl4030_set_suspend(struct otg_transceiver *x, int suspend)
+int twl4030_set_suspend(struct otg_transceiver *x, int suspend)
 {
 	struct twl4030_usb *twl = xceiv_to_twl(x);
 
@@ -727,6 +732,12 @@ static int twl4030_set_suspend(struct otg_transceiver *x, int suspend)
 
 	return 0;
 }
+EXPORT_SYMBOL(twl4030_set_suspend);
+int twl4030_is_asleep(struct twl4030_usb *twl)
+{
+	return twl->asleep;
+}
+EXPORT_SYMBOL(twl4030_is_asleep);
 
 static int twl4030_set_peripheral(struct otg_transceiver *x,
 		struct usb_gadget *gadget)
@@ -851,6 +862,8 @@ static void twl4030_dump_regs(struct twl4030_usb *twl)
 	}
 }
 
+struct twl4030_usb *g_twl;
+EXPORT_SYMBOL(g_twl);
 static int __init twl4030_usb_probe(struct platform_device *pdev)
 {
 	struct twl4030_usb_data *pdata = pdev->dev.platform_data;
@@ -952,6 +965,7 @@ static int __init twl4030_usb_probe(struct platform_device *pdev)
 	twl4030_dump_regs(twl);
 	if(twl->asleep)
 		twl4030_phy_power(twl, 0);
+	g_twl = twl;
 	return 0;
 }
 
