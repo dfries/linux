@@ -210,6 +210,7 @@
 #define ID_DEBOUNCE			0xC1
 #define VBAT_TIMER			0xD3
 #define PHY_PWR_CTRL			0xFD
+/* 0 normal state, 1 power down */
 #define PHY_PWR_PHYPWD			(1 << 0)
 #define PHY_CLK_CTRL			0xFE
 #define PHY_CLK_CTRL_CLOCKGATING_EN	(1 << 2)
@@ -760,6 +761,96 @@ static int twl4030_set_host(struct otg_transceiver *x, struct usb_bus *host)
 	return 0;
 }
 
+static void twl4030_dump_regs(struct twl4030_usb *twl)
+{
+	int i;
+	struct {
+		const char *name;
+		int reg;
+	} list[] = {
+		/* The second entry is a raw value when there isn't an
+		 * earlier #define for that address.
+		 */
+		{"VENDOR_ID_LO", VENDOR_ID_LO},
+		{"VENDOR_ID_HI", VENDOR_ID_HI},
+		{"PRODUCT_ID_LO", PRODUCT_ID_LO},
+		{"PRODUCT_ID_HI", PRODUCT_ID_HI},
+		{"FUNC_CTRL", FUNC_CTRL},
+		{"IFC_CTRL", IFC_CTRL},
+		{"TWL4030_OTG_CTRL", TWL4030_OTG_CTRL},
+		{"USB_INT_EN_RISE", USB_INT_EN_RISE},
+		{"USB_INT_EN_FALL", USB_INT_EN_FALL},
+		{"USB_INT_STS", USB_INT_STS},
+		{"USB_INT_LATCH", USB_INT_LATCH},
+			{"DEBUG", 0x15},
+		{"CARKIT_CTRL", CARKIT_CTRL},
+			{"CARKIT_INT_DELAY", 0x1c},
+			{"CARKIT_INT_EN", 0x1d},
+			{"CARKIT_INT_STS", 0x20},
+			{"CARKIT_INT_LATCH", 0x21},
+		{"CARKIT_PLS_CTRL", CARKIT_PLS_CTRL},
+			{"TRANS_POS_WIDTH", 0x25},
+			{"TRANS_NEG_WIDTH", 0x26},
+			{"RCV_PLTY_RECOVERY", 0x27},
+		{"MCPC_CTRL", MCPC_CTRL},
+		{"MCPC_IO_CTRL", MCPC_IO_CTRL},
+		{"MCPC_CTRL2", MCPC_CTRL2},
+		{"OTHER_FUNC_CTRL", OTHER_FUNC_CTRL},
+		{"OTHER_IFC_CTRL", OTHER_IFC_CTRL},
+		{"OTHER_INT_EN_RISE", OTHER_INT_EN_RISE},
+		{"OTHER_INT_EN_FALL", OTHER_INT_EN_FALL},
+		{"OTHER_INT_STS", OTHER_INT_STS},
+		{"OTHER_INT_LATCH", OTHER_INT_LATCH},
+		{"ID_STATUS", ID_STATUS},
+			{"CARKIT_SM_1_INT_EN", 0x97},
+			{"CARKIT_SM_1_INT_STS", 0x9a},
+			{"CARKIT_SM_1_INT_LATCH", 0x9b},
+			{"CARKIT_SM_2_INT_EN", 0x9c},
+			{"CARKIT_SM_2_INT_STS", 0x9f},
+			{"CARKIT_SM_2_INT_LATCH", 0xa0},
+			{"CARKIT_SM_CTRL", 0xa1},
+			{"CARKIT_SM_CMD", 0xa4},
+			{"CARKIT_SM_STS", 0xa7},
+			{"CARKIT_SM_STATUS", 0xaa},
+			{"CARKIT_SM_ERR_STATUS", 0xa8},
+			{"CARKIT_SM_CTRL_STATE", 0xab},
+		{"POWER_CTRL", POWER_CTRL},
+		{"OTHER_IFC_CTRL2", OTHER_IFC_CTRL2},
+		{"REG_CTRL_EN", REG_CTRL_EN},
+		{"REG_CTRL_ERROR", REG_CTRL_ERROR},
+		{"OTHER_FUNC_CTRL2", OTHER_FUNC_CTRL2},
+			{"CARKIT_ANA_CTRL", 0xbb},
+		{"VBUS_DEBOUNCE", VBUS_DEBOUNCE},
+		{"ID_DEBOUNCE", ID_DEBOUNCE},
+			{"TPH_DP_CON_MIN", 0xc2},
+			{"TPH_DP_CON_MAX", 0xc3},
+			{"TCR_DP_CON_MIN", 0xc4},
+			{"TCR_DP_CON_MAX", 0xc5},
+			{"TPH_DP_PD_SHORT", 0xc6},
+			{"TPH_CMD_DLY", 0xc7},
+			{"TPH_DET_RST", 0xc8},
+			{"TPH_AUD_BIAS", 0xc9},
+			{"TCR_UART_DET_MIN", 0xca},
+			{"TCR_UART_DET_MAX", 0xcb},
+			{"TPH_ID_INT_PW", 0xcd},
+			{"TACC_ID_INT_WAIT", 0xce},
+			{"TACC_ID_INT_PW", 0xcf},
+			{"TPH_CMD_WAIT", 0xd0},
+			{"TPH_ACK_WAIT", 0xd1},
+			{"TPH_DP_DISC_DET", 0xd2},
+		{"VBAT_TIMER", VBAT_TIMER},
+			{"CARKIT_4W_DEBUG", 0xe0},
+			{"CARKIT_5W_DEBUG", 0xe1},
+		{"PHY_PWR_CTRL", PHY_PWR_CTRL},
+		{"PHY_CLK_CTRL", PHY_CLK_CTRL},
+		{"PHY_CLK_CTRL_STS", PHY_CLK_CTRL_STS}
+	};
+	for(i=0; i<sizeof(list)/sizeof(*list); ++i) {
+		printk("%s\t%x\n", list[i].name,
+			twl4030_usb_read(twl, list[i].reg));
+	}
+}
+
 static int __init twl4030_usb_probe(struct platform_device *pdev)
 {
 	struct twl4030_usb_data *pdata = pdev->dev.platform_data;
@@ -788,6 +879,17 @@ static int __init twl4030_usb_probe(struct platform_device *pdev)
 	/* init spinlock for workqueue */
 	spin_lock_init(&twl->lock);
 
+	/* The observation is when the PHY is powered down most registers
+	 * return the same value (normally 0x40 or 0), check two fixed
+	 * registers that differ in value, if they match assume it is up.
+	 */
+	if(twl4030_usb_read(twl, VENDOR_ID_LO) == 0x51 &&
+		twl4030_usb_read(twl, VENDOR_ID_HI) == 0x4) {
+		printk("register dump, %s start\n", __func__);
+		twl4030_dump_regs(twl);
+	} else
+		printk(KERN_DEBUG "PHY powered down skipping register dump\n");
+
 	err = twl4030_usb_ldo_init(twl);
 	if (err) {
 		dev_err(&pdev->dev, "ldo init failed\n");
@@ -795,6 +897,11 @@ static int __init twl4030_usb_probe(struct platform_device *pdev)
 		return err;
 	}
 	otg_set_transceiver(&twl->otg);
+
+	/* power up to dump registers */
+	twl4030_phy_resume(twl);
+	printk("register dump, %s powered up\n", __func__);
+	twl4030_dump_regs(twl);
 
 	platform_set_drvdata(pdev, twl);
 	if (device_create_file(&pdev->dev, &dev_attr_vbus))
@@ -839,6 +946,12 @@ static int __init twl4030_usb_probe(struct platform_device *pdev)
 	}
 
 	dev_info(&pdev->dev, "Initialized TWL4030 USB module\n");
+	/* power up required to read the registers */
+	if(twl->asleep)
+		twl4030_phy_power(twl, 1);
+	twl4030_dump_regs(twl);
+	if(twl->asleep)
+		twl4030_phy_power(twl, 0);
 	return 0;
 }
 
@@ -853,6 +966,9 @@ static int __exit twl4030_usb_remove(struct platform_device *pdev)
 	/* enable the registers to disable OTG */
 	if(twl->asleep)
 		twl4030_phy_power(twl, 1);
+
+	printk("registers at the start of %s\n", __func__);
+	twl4030_dump_regs(twl);
 
 	/* disable complete OTG block */
 	twl4030_usb_clear_bits(twl, POWER_CTRL, POWER_CTRL_OTG_ENAB);
