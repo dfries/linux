@@ -51,4 +51,11 @@ config TWL4030_USB
 	  This is transceiver supports high and full speed devices
 	  plus, in host mode, low speed.
 
+config TWL4030_HACK
+	tristate "TWL4030 hack debug"
+	depends on TWL4030_USB
+	select USB_OTG_UTILS
+	help
+	  Debug TWL4030.
+
 endif # USB || OTG

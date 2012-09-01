@@ -13,3 +13,4 @@ obj-$(CONFIG_TWL4030_USB)	+= twl4030-usb.o
 ccflags-$(CONFIG_USB_DEBUG)	+= -DDEBUG
 ccflags-$(CONFIG_USB_GADGET_DEBUG) += -DDEBUG
 
+obj-$(CONFIG_TWL4030_HACK)		+= twl4030-hack.o
