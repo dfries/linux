@@ -524,8 +524,7 @@ static void twl4030_phy_suspend(struct twl4030_usb *twl, int controller_off)
 		mutex_lock(&musb->mutex);
 
 	twl4030_phy_power(twl, 0);
-	if (!controller_off)
-		twl->asleep = 1;
+	twl->asleep = 1;
 
 	if(musb)
 		mutex_unlock(&musb->mutex);
