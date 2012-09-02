@@ -404,8 +404,6 @@ static inline void InitKey(HAND_KEY aKey, struct PVRSRV_HANDLE_BASE *psBase,
 
 static void FreeHandleArray(struct PVRSRV_HANDLE_BASE *psBase)
 {
-	enum PVRSRV_ERROR eError = PVRSRV_OK;
-
 	if (psBase->psHandleArray != NULL) {
 		OSFreeMem(PVRSRV_OS_NON_PAGEABLE_HEAP,
 			   psBase->ui32TotalHandCount *

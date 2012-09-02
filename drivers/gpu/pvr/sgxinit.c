@@ -214,7 +214,6 @@ static void SGXGetTimingInfo(struct PVRSRV_DEVICE_NODE *psDeviceNode)
 	struct SGX_TIMING_INFORMATION sSGXTimingInfo = { 0 };
 	u32 ui32ActivePowManSampleRate;
 	struct timer_work_data *data = psDevInfo->hTimer;
-	enum PVRSRV_ERROR eError;
 
 	SysGetSGXTimingInformation(&sSGXTimingInfo);
 
