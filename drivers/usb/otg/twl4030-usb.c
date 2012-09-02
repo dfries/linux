@@ -829,6 +829,13 @@ static int __exit twl4030_usb_remove(struct platform_device *pdev)
 	cancel_delayed_work_sync(&twl->work);
 	twl4030_work_ptr = NULL;
 
+	/* enable the registers to disable OTG */
+	if(twl->asleep)
+		twl4030_phy_power(twl, 1);
+
+	/* disable complete OTG block */
+	twl4030_usb_clear_bits(twl, POWER_CTRL, POWER_CTRL_OTG_ENAB);
+
 	free_irq(twl->irq, twl);
 	device_remove_file(twl->dev, &dev_attr_vbus);
 	device_remove_file(twl->dev, &dev_attr_linkstat);
@@ -846,9 +853,6 @@ static int __exit twl4030_usb_remove(struct platform_device *pdev)
 		val &= ~(PHY_CLK_CTRL_CLK32K_EN | REQ_PHY_DPLL_CLK);
 		twl4030_usb_write(twl, PHY_CLK_CTRL, (u8)val);
 	}
-
-	/* disable complete OTG block */
-	twl4030_usb_clear_bits(twl, POWER_CTRL, POWER_CTRL_OTG_ENAB);
 
 	twl4030_phy_power(twl, 0);
 	regulator_put(twl->usb1v5);
