@@ -1215,6 +1215,7 @@ static void musb_emergency_stop(void)
  * called on gadget driver unregister
  * with controller locked, irqs blocked
  * acts as a NOP unless some role activated the hardware
+ * note called while atomic
  */
 void musb_stop(struct musb *musb)
 {
