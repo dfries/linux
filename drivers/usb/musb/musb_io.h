@@ -108,11 +108,68 @@ static inline void musb_writeb(void __iomem *addr, unsigned offset, u8 data)
 
 #else
 
+#define MUSB_LOGGING 1
+#ifdef MUSB_LOGGING
+static inline u8 _musb_readb(const char *caller, int line,
+	const char *offset_str, const void __iomem *addr, unsigned offset)
+{
+	static const char *last_caller;
+	static const void *last_addr;
+	static unsigned last_offset;
+	static unsigned last_data;
+	static int counter;
+	int last_counter=counter;
+
+	u8 data = __raw_readb(addr + offset);
+
+	if(last_caller != caller || last_addr != addr ||
+		last_offset != offset || last_data != data) {
+		printk(KERN_DEBUG "%u readb  %25s %4u %19s is  0x%02x\n",
+			last_counter, caller, line, offset_str, data);
+		last_caller = caller;
+		last_addr = addr;
+		last_offset = offset;
+		counter = 0;
+	}
+	++counter;
+	last_data=data;
+	return data;
+}
+
+static inline void _musb_writeb(const char *caller, int line,
+	const char *offset_str, void __iomem *addr, unsigned offset, u8 data)
+{
+	static const char *last_caller;
+	static const void *last_addr;
+	static unsigned last_offset;
+	static unsigned last_data;
+	static int counter;
+	int last_counter=counter;
+	if(last_caller != caller || last_addr != addr ||
+		last_offset != offset || last_data != data) {
+		printk(KERN_DEBUG "%u writeb %25s %4u %19s data 0x%02x\n",
+			last_counter, caller, line, offset_str, data);
+		last_caller = caller;
+		last_addr = addr;
+		last_offset = offset;
+		counter = 0;
+	}
+	++counter;
+	last_data=data;
+
+	__raw_writeb(data, addr + offset);
+}
+#define musb_readb(addr, offset) \
+	_musb_readb(__func__, __LINE__, #offset, addr, offset)
+#define musb_writeb(addr, offset, data) \
+	_musb_writeb(__func__, __LINE__, #offset, addr, offset, data)
+#else
 static inline u8 musb_readb(const void __iomem *addr, unsigned offset)
 	{ return __raw_readb(addr + offset); }
 
 static inline void musb_writeb(void __iomem *addr, unsigned offset, u8 data)
 	{ __raw_writeb(data, addr + offset); }
+#endif
 
 #endif	/* CONFIG_USB_TUSB6010 */
 
