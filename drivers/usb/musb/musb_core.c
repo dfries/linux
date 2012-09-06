@@ -2665,8 +2665,13 @@ static int musb_suspend(struct platform_device *pdev, pm_message_t message)
 		 */
 	}
 
-	/* save context */
-	musb_save_ctx(musb);
+	/* save context, actually don't, the hardware register context 'now'
+	 * is in such a state that restoring it later will prevent talking to
+	 * a computer USB port (or charging).  However leaving the register
+	 * context as stored previously will allow it to work.
+	 *
+	 * musb_save_ctx(musb);
+	 */
 
 	if (musb->set_clock)
 		musb->set_clock(musb->clock, 0);
