@@ -2673,6 +2673,7 @@ static int musb_suspend(struct platform_device *pdev, pm_message_t message)
 {
 	unsigned long	flags;
 	struct musb	*musb = dev_to_musb(&pdev->dev);
+	u8 power;
 
 
 	spin_lock_irqsave(&musb->lock, flags);
@@ -2707,6 +2708,11 @@ static int musb_suspend(struct platform_device *pdev, pm_message_t message)
 	musb_hnp_stop(musb);
 	musb_pullup(musb, 0);
 	musb_stop(musb);
+	if (musb->suspendm) {
+		power = musb_readb(musb->mregs, MUSB_POWER);
+		musb_writeb(musb->mregs, MUSB_POWER, power |
+			MUSB_POWER_SUSPENDM | MUSB_POWER_ENSUSPEND);
+	}
 	return 0;
 }
 
