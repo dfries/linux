@@ -289,6 +289,7 @@ static int musb_charger_detect(struct musb *musb)
 							& ISP1704_PWR_CTRL_VDAT_DET);
 				if (vdat)
 					break;
+				msleep(1);
 			}
 			if (vdat)
 				vdat = musb_verify_charger(musb->mregs);
