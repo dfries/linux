@@ -2695,6 +2695,8 @@ static int musb_suspend(struct platform_device *pdev, pm_message_t message)
 	struct musb	*musb = dev_to_musb(&pdev->dev);
 	u8 power;
 
+	printk(KERN_DEBUG "%s musb->xceiv->gadget %p\n", __func__,
+		musb->xceiv ? musb->xceiv->gadget : NULL);
 
 	spin_lock_irqsave(&musb->lock, flags);
 
@@ -2741,6 +2743,8 @@ static int musb_resume(struct platform_device *pdev)
 	unsigned long	flags;
 	struct musb	*musb = dev_to_musb(&pdev->dev);
 
+	printk(KERN_DEBUG "%s musb->xceiv->gadget %p\n", __func__,
+		musb->xceiv ? musb->xceiv->gadget : NULL);
 
 	spin_lock_irqsave(&musb->lock, flags);
 
