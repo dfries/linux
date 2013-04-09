@@ -81,4 +81,10 @@ config CHARGER_BQ2415X
 	help
 	  Say Y here to enable support for chargers with BQ2415X(I2C) chip.
 
+config BATTERY_RX51
+	tristate "Nokia RX-51 battery driver"
+	depends on TWL4030_MADC
+	help
+	  Say Y here to enable support for battery information on Nokia RX-51.
+
 endif # POWER_SUPPLY
