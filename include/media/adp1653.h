@@ -27,6 +27,7 @@
 
 #include <linux/videodev2.h>
 #include <linux/i2c.h>
+#include <linux/device.h>
 #include <media/v4l2-int-device.h>
 #include <media/smiaregs.h>
 
@@ -75,6 +76,7 @@ struct adp1653_flash {
 	u32 flash_intensity;
 	u32 torch_intensity;
 	u32 indicator_intensity;
+	u32 indicator_disabled;
 
 	struct v4l2_int_device *v4l2_int_device;
 
