@@ -212,6 +212,7 @@ static int omap_set_power(struct otg_transceiver *x, unsigned mA)
 }
 
 static int musb_platform_resume(struct musb *musb);
+static int musb_platform_suspend(struct musb *musb);
 
 int musb_platform_set_mode(struct musb *musb, u8 musb_mode, u8 hostspeed)
 {
@@ -254,6 +255,7 @@ int musb_platform_set_mode(struct musb *musb, u8 musb_mode, u8 hostspeed)
                         musb_writeb(musb->mregs, MUSB_DEVCTL, devctl);
  
                         musb_writeb(musb->mregs, MUSB_TESTMODE, 0);
+			musb_platform_suspend(musb);
                 }
  
 		otg_set_peripheral(musb->xceiv, &musb->g);

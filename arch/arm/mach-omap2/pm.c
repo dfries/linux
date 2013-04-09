@@ -322,6 +322,8 @@ static ssize_t vdd_opp_store(struct kobject *kobj, struct kobj_attribute *attr,
 			resource_lock_opp(PRCM_VDD1);
 			vdd1_locked = 1;
 		}
+		else
+			return n;
 	} else if (attr == &vdd2_lock_attr) {
 		flags = OPP_IGNORE_LOCK;
 		attr = &vdd2_opp_attr;
@@ -335,6 +337,8 @@ static ssize_t vdd_opp_store(struct kobject *kobj, struct kobj_attribute *attr,
 			resource_lock_opp(PRCM_VDD2);
 			vdd2_locked = 1;
 		}
+		else
+			return n;
 	}
 
 	if (attr == &vdd1_opp_attr) {
