@@ -100,7 +100,9 @@ obj-$(CONFIG_MACH_NOKIA_RX51)		+= board-rx51.o \
 					   board-rx51-peripherals.o \
 					   mmc-twl4030.o \
 					   ssi.o \
-					   usb-musb.o
+					   usb-musb.o \
+					   board-rx51-smc.o board-rx51-secure.o
+
 obj-$(CONFIG_MACH_NOKIA_RX71)		+= board-rx71.o \
 					   board-rx71-peripherals.o
 
