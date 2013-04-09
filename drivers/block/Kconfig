@@ -446,4 +446,6 @@ config BLK_DEV_HD
 
 	  If unsure, say N.
 
+source "drivers/block/ramzswap/Kconfig"
+
 endif # BLK_DEV
