@@ -37,6 +37,8 @@
 #include <linux/regulator/consumer.h>
 #include <linux/err.h>
 
+#include <asm/mach-types.h>
+#include <mach/board-rx51.h>
 
 /* Register defines */
 
@@ -263,6 +265,9 @@ struct twl4030_usb {
 	u8			linkstat;
 	u8			asleep;
 	bool			irq_enabled;
+
+	struct delayed_work	work;
+	int			work_inited;
 };
 
 /* internal define on top of container_of */
@@ -364,6 +369,13 @@ static enum linkstat twl4030_usb_linkstat(struct twl4030_usb *twl)
 
 	dev_dbg(twl->dev, "HW_CONDITIONS 0x%02x/%d; link %d\n",
 			status, status, linkstat);
+
+	if (machine_is_nokia_rx51() && rx51_with_charger_detection()) {
+		rx51_set_charger(linkstat == USB_LINK_VBUS);
+		if (twl->work_inited && linkstat == USB_LINK_VBUS) {
+			schedule_delayed_work(&twl->work, 2 * HZ); /* 2 seconds should be enought */
+		}
+	}
 
 	/* REVISIT this assumes host and peripheral controllers
 	 * are registered, and that both are active...
@@ -763,6 +775,11 @@ static int __init twl4030_usb_probe(struct platform_device *pdev)
 	 * because of scheduling delays.
 	 */
 	twl4030_usb_irq(twl->irq, twl);
+
+	if (machine_is_nokia_rx51()) {
+		INIT_DELAYED_WORK(&twl->work, rx51_detect_wallcharger);
+		twl->work_inited = 1;
+	}
 
 	dev_info(&pdev->dev, "Initialized TWL4030 USB module\n");
 	return 0;

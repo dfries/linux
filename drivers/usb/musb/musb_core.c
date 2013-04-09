@@ -105,6 +105,8 @@
 #include <asm/mach-types.h>
 #endif
 
+#include <mach/board-rx51.h>
+
 #include "musb_core.h"
 
 
@@ -221,6 +223,9 @@ static int musb_charger_detect(struct musb *musb)
 	u8              vdat = 0;
 	u8              r;
 
+	if (machine_is_nokia_rx51() && !rx51_with_charger_detection())
+		return 0;
+
 	msleep(5);
 
 	/* Using ulpi with musb is quite tricky. The following code
@@ -308,6 +313,8 @@ static int musb_charger_detect(struct musb *musb)
 		/* Regulators off */
 		otg_set_suspend(musb->xceiv, 1);
 		musb->is_charger = 1;
+		if (machine_is_nokia_rx51() && rx51_with_charger_detection())
+			rx51_set_wallcharger(1);
 	} else {
 		/* enable interrupts */
 		musb_writeb(musb->mregs, MUSB_INTRUSBE, ctx.intrusbe);
@@ -325,6 +332,13 @@ static int musb_charger_detect(struct musb *musb)
 
 	return vdat;
 }
+
+void rx51_detect_wallcharger(void *work)
+{
+	if (the_musb)
+		musb_charger_detect(the_musb);
+}
+EXPORT_SYMBOL(rx51_detect_wallcharger);
 
 /*-------------------------------------------------------------------------*/
 

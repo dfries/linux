@@ -38,6 +38,8 @@
 #include <mach/hardware.h>
 #include <mach/mux.h>
 
+#include <mach/board-rx51.h>
+
 #include <linux/i2c/twl4030.h>
 
 #include "musb_core.h"
@@ -230,6 +232,7 @@ int musb_platform_set_mode(struct musb *musb, u8 musb_mode, u8 hostspeed)
  
                 if (machine_is_nokia_rx51()) {
                         u8 testmode;
+                        rx51_enable_charger_detection(0);
  
                         musb_platform_resume(musb);
  
@@ -256,6 +259,7 @@ int musb_platform_set_mode(struct musb *musb, u8 musb_mode, u8 hostspeed)
  
                         musb_writeb(musb->mregs, MUSB_TESTMODE, 0);
 			musb_platform_suspend(musb);
+                        rx51_enable_charger_detection(1);
                 }
  
 		otg_set_peripheral(musb->xceiv, &musb->g);
@@ -433,6 +437,9 @@ void musb_save_ctx_and_suspend(struct usb_gadget *gadget, int overwrite)
 	omap_writel(l, OTG_SYSCONFIG);
 
 	musb->is_charger = 0;
+
+	if (machine_is_nokia_rx51() && rx51_with_charger_detection())
+		rx51_set_wallcharger(0);
 
 	/* clear constraints */
 	if (musb->board && musb->board->set_pm_limits)

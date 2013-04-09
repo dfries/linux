@@ -38,6 +38,8 @@
 #include <mach/omap-pm.h>
 
 #include "../../../drivers/input/lirc/lirc_rx51.h"
+#include <mach/board-rx51.h>
+#include <linux/power/bq2415x_charger.h>
 
 #define RX51_DEBUG_BASE			0x08000000  /* debug board */
 #define RX51_ETHR_START			RX51_DEBUG_BASE
@@ -563,6 +565,79 @@ static struct i2c_board_info __initdata rx51_peripherals_i2c_board_info_1[] = {
 	},
 };
 
+static int rx51_charger_mode;
+static int rx51_charger_connected;
+static int rx51_wallcharger_connected;
+static int rx51_charger_detection = 1;
+
+static void *rx51_charger_hook_data;
+static void (*rx51_charger_hook)(enum bq2415x_mode mode, void *data);
+
+static int rx51_charger_set_hook(void (*hook)(enum bq2415x_mode mode, void *data), void *data)
+{
+	rx51_charger_hook = hook;
+	rx51_charger_hook_data = data;
+	if (rx51_charger_hook)
+		rx51_charger_hook(rx51_charger_mode, rx51_charger_hook_data);
+	return 1;
+}
+
+static void rx51_update_charger_mode(void)
+{
+	enum bq2415x_mode mode;
+	if (rx51_charger_connected && rx51_wallcharger_connected)
+		mode = BQ2415X_MODE_DEDICATED_CHARGER; /* wallcharger */
+	else if (rx51_charger_connected)
+		mode = BQ2415X_MODE_HOST_CHARGER; /* usb charger */
+	else
+		mode = BQ2415X_MODE_OFF; /* no charger */
+
+	if (rx51_charger_mode == mode)
+		return;
+
+	printk("rx51_update_charger_mode (mode = %d)\n", mode);
+	rx51_charger_mode = mode;
+
+	if (rx51_charger_hook)
+		rx51_charger_hook(rx51_charger_mode, rx51_charger_hook_data);
+}
+
+void rx51_set_charger(int connected)
+{
+	rx51_charger_connected = connected;
+	rx51_update_charger_mode();
+}
+EXPORT_SYMBOL(rx51_set_charger);
+
+void rx51_set_wallcharger(int connected)
+{
+	rx51_wallcharger_connected = connected;
+	rx51_update_charger_mode();
+}
+EXPORT_SYMBOL(rx51_set_wallcharger);
+
+void rx51_enable_charger_detection(int enable)
+{
+	rx51_charger_detection = enable;
+}
+EXPORT_SYMBOL(rx51_enable_charger_detection);
+
+int rx51_with_charger_detection(void)
+{
+	return rx51_charger_detection;
+}
+EXPORT_SYMBOL(rx51_with_charger_detection);
+
+static struct bq2415x_platform_data rx51_bq24150_platform_data = {
+	.current_limit = 100,			/* mA */
+	.weak_battery_voltage = 3400,		/* mV */
+	.battery_regulation_voltage = 4200,	/* mV */
+	.charge_current = 950, /*1200*/		/* mA */
+	.termination_current = 100, /*400*/	/* mA */
+	.resistor_sense = 68,			/* m ohm */
+	.set_mode_hook = &rx51_charger_set_hook,
+};
+
 static struct i2c_board_info __initdata rx51_peripherals_i2c_board_info_2[] = {
 	{
 		I2C_BOARD_INFO("lp5523", 0x32),
@@ -574,6 +649,10 @@ static struct i2c_board_info __initdata rx51_peripherals_i2c_board_info_2[] = {
 	},
 	{
 		I2C_BOARD_INFO("bq27200", 0x55),
+	},
+	{
+		I2C_BOARD_INFO("bq24150a", 0x6b),
+		.platform_data = &rx51_bq24150_platform_data,
 	},
 };
 
