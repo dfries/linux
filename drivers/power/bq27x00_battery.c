@@ -39,7 +39,20 @@
 #include <asm/unaligned.h>
 #include <asm/uaccess.h>
 
-#include <linux/power/bq27x00_battery.h>
+#define CONFIG_BATTERY_BQ27X00_I2C
+
+struct bq27000_platform_data {
+	const char *name;
+	int (*read)(struct device *dev, unsigned int);
+};
+
+#define BQ27X00_READ_REG _IO(MISC_MAJOR, 0)
+
+struct bq27x00_reg_parms {
+	int reg;
+	int single;
+	int ret;
+};
 
 #define DRIVER_VERSION			"1.2.0"
 
@@ -123,7 +136,9 @@ static enum power_supply_property bq27x00_battery_props[] = {
 	POWER_SUPPLY_PROP_VOLTAGE_NOW,
 	POWER_SUPPLY_PROP_CURRENT_NOW,
 	POWER_SUPPLY_PROP_CAPACITY,
+/*
 	POWER_SUPPLY_PROP_CAPACITY_LEVEL,
+*/
 	POWER_SUPPLY_PROP_TEMP,
 	POWER_SUPPLY_PROP_TIME_TO_EMPTY_NOW,
 	POWER_SUPPLY_PROP_TIME_TO_EMPTY_AVG,
@@ -132,8 +147,10 @@ static enum power_supply_property bq27x00_battery_props[] = {
 	POWER_SUPPLY_PROP_CHARGE_FULL,
 	POWER_SUPPLY_PROP_CHARGE_NOW,
 	POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN,
+/*
 	POWER_SUPPLY_PROP_CYCLE_COUNT,
 	POWER_SUPPLY_PROP_ENERGY_NOW,
+*/
 };
 
 static unsigned int poll_interval = 360;
@@ -377,7 +394,9 @@ static void bq27x00_battery_poll(struct work_struct *work)
 
 	if (poll_interval > 0) {
 		/* The timer does not have to be accurate. */
+		/*
 		set_timer_slack(&di->work.timer, poll_interval * HZ / 4);
+		*/
 		schedule_delayed_work(&di->work, poll_interval * HZ);
 	}
 }
@@ -447,6 +466,7 @@ static int bq27x00_battery_status(struct bq27x00_device_info *di,
 	return 0;
 }
 
+/*
 static int bq27x00_battery_capacity_level(struct bq27x00_device_info *di,
 	union power_supply_propval *val)
 {
@@ -476,6 +496,7 @@ static int bq27x00_battery_capacity_level(struct bq27x00_device_info *di,
 
 	return 0;
 }
+*/
 
 /*
  * Return the battery Voltage in milivolts
@@ -544,9 +565,11 @@ static int bq27x00_battery_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CAPACITY:
 		ret = bq27x00_simple_value(di->cache.capacity, val);
 		break;
+/*
 	case POWER_SUPPLY_PROP_CAPACITY_LEVEL:
 		ret = bq27x00_battery_capacity_level(di, val);
 		break;
+*/
 	case POWER_SUPPLY_PROP_TEMP:
 		ret = bq27x00_simple_value(di->cache.temperature, val);
 		break;
@@ -571,12 +594,14 @@ static int bq27x00_battery_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
 		ret = bq27x00_simple_value(di->charge_design_full, val);
 		break;
+/*
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
 		ret = bq27x00_simple_value(di->cache.cycle_count, val);
 		break;
 	case POWER_SUPPLY_PROP_ENERGY_NOW:
 		ret = bq27x00_simple_value(di->cache.energy, val);
 		break;
+*/
 	default:
 		return -EINVAL;
 	}
