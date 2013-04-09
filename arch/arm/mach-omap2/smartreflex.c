@@ -37,6 +37,7 @@
 #include "prm.h"
 #include "smartreflex.h"
 #include "prm-regbits-34xx.h"
+#include "omap3-opp.h"
 
 /*
  * VP_TRANXDONE_TIMEOUT: maximum microseconds to wait for the VP to
@@ -73,6 +74,23 @@
  */
 #define SR_DISABLE_MAX_ATTEMPTS 4
 
+#define ACCURACY		100
+#define NDELTA_3430		(3.0 * ACCURACY)
+#define PDELTA_3430		(2.6 * ACCURACY)
+
+/* Since factory calibrated Efuse values lead to very high SR calculated voltages
+ * adjust them with a constant
+ */
+#define SR_NVALUE_ADJUST_LOWOPP   -150000 /* For 125 and 250 MHz */
+#define SR_NVALUE_ADJUST_HIGHOPP  -125000 /* For 500+ MHz */
+
+/* Boost voltage with the bellow value(in uV) when DSP frequency is >430 MHz and 
+ * twice that value when DSP frequency is > 520 Mhz
+ */
+#define SR_NVALUE_DSP_MAX_ADJUST 100000
+
+static atomic_t sr_vdd1_dsp_boost_coeff;
+
 struct omap_sr {
 	int		srid;
 	int		is_sr_reset;
@@ -82,6 +100,7 @@ struct omap_sr {
 	u32		req_opp_no;
 	u32		opp1_nvalue, opp2_nvalue, opp3_nvalue, opp4_nvalue;
 	u32		opp5_nvalue;
+	u32		opp6_nvalue, opp7_nvalue, opp8_nvalue, opp9_nvalue;
 	u32		senp_mod, senn_mod;
 	void __iomem	*srbase_addr;
 	void __iomem	*vpbase_addr;
@@ -101,6 +120,7 @@ static inline void sr_modify_reg(struct omap_sr *sr, unsigned offset, u32 mask,
 
 	reg_val = __raw_readl(SR_REGADDR(offset));
 	reg_val &= ~mask;
+
 	reg_val |= value;
 
 	__raw_writel(reg_val, SR_REGADDR(offset));
@@ -211,26 +231,173 @@ static void sr_set_clk_length(struct omap_sr *sr)
 	}
 }
 
+static u32 calculate_opp_nadj(u32 opp_value, u32 delta_n)
+{
+	u32 sen_ngain_fuse, sen_nrn_fuse;
+
+	sen_ngain_fuse = (opp_value & 0x000F0000) >> 0x10;
+	sen_nrn_fuse = (opp_value & 0x000000FF);
+
+	return ((1 << (sen_ngain_fuse + 8)) / sen_nrn_fuse) + delta_n;
+}
+
+static u32 calculate_opp_padj(u32 opp_value, u32 delta_p)
+{
+	u32 sen_pgain_fuse, sen_prn_fuse;
+
+	sen_pgain_fuse = (opp_value & 0x000F00000) >> 0x14;
+	sen_prn_fuse = (opp_value & 0x0000FF00) >> 8;
+
+	return ((1 << (sen_pgain_fuse + 8)) / sen_prn_fuse) + delta_p;
+}
+
+static u32 get_padj_for_freq(u32 opp0fuse,u32 opp1fuse, u32 freq)
+{
+	u32 padj_0=calculate_opp_padj(opp0fuse,0);
+	u32 padj_1=calculate_opp_padj(opp1fuse,0);
+	u32 p_slope_a=(1000*(padj_1-padj_0))/(250-125);
+	u32 p_slope_b=1000*(padj_1-p_slope_a*250/1000);
+
+	return (u32)(p_slope_a*freq+p_slope_b)/1000;
+}
+
+static u32 get_nadj_for_freq(u32 opp0fuse,u32 opp1fuse, u32 freq)
+{
+	u32 nadj_0=calculate_opp_nadj(opp0fuse,0);
+	u32 nadj_1=calculate_opp_nadj(opp1fuse,0);
+	u32 n_slope_a=(1000*(nadj_1-nadj_0))/(250-125);
+	u32 n_slope_b=1000*(nadj_1-n_slope_a*250/1000);
+
+	return (u32)(n_slope_a*freq+n_slope_b)/1000;
+}
+
+/**
+ * recalc_with_margin() - helper to add margin to reciprocal and gain
+ * @uv:		voltage in uVolts to add.
+ * @soc_delta:	SoC specific delta base
+ * @reci:	Reciprocal for the sensor
+ * @gain:	Gain for the sensor
+ *
+ * The algorithm computes an adjustment required to meet the delta voltage
+ * to be added to a given sensor's reciprocal and gain. It then does a
+ * search for maximum gain for valid reciprocal value. This forms the
+ * new reciprocal and gain which incorporates the additional voltage
+ * requested.
+ *
+ * IMPORTANT: since it is not possible to ascertain the actual voltage from
+ * ntarget value, the additional voltage will be accurate upto 1 additional
+ * pmic step. The algorithm is optimized to adjust to higher end rather than
+ * less than requested additional voltage as it could be unsafe to run at
+ * voltage lower than requested level.
+ *
+ * Example: if the PMIC step size is 12.5 and requested margin in 25mV(2 PMIC
+ * steps). the actual voltage achieved can be original V achieved + 25mV upto
+ * original V + 37.5mV(3 steps) - depending on where V was achieved.
+ */
+static __init int recalc_with_margin(long uv, int soc_delta, unsigned int *reci,
+		unsigned int *gain)
+{
+	int r = 0, g = 0;
+	int nadj = 0;
+
+	nadj = ((1 << (*gain + 8)) * ACCURACY) / (*reci) +
+		soc_delta * uv / 1000;
+
+	/* Linear search for the best reciprocal */
+	for (g = 15; g >= 0; g--) {
+		r = ((1 << (g + 8)) * ACCURACY) / nadj;
+		if (r < 256) {
+			*reci = r;
+			*gain = g;
+			return 0;
+		}
+	}
+	/* Dont modify the input, just return error */
+	return -EINVAL;
+}
+
+/**
+ * sr_ntarget_add_margin() - Modify h/w ntarget to add a s/w margin
+ * @vdata:	voltage data for the OPP to be modified with ntarget populated
+ * @add_uv:	voltate to add to nTarget in uVolts
+ *
+ * Once the sr_device_init is complete and nTargets are populated, using this
+ * function nTarget read from h/w efuse and stored in vdata is modified to add
+ * a platform(board) specific additional voltage margin. Based on analysis,
+ * we might need different margins to be added per vdata.
+ */
+int __init sr_ntarget_add_margin(u32 old_ntarget, ulong add_uv)
+{
+	u32 temp_senp_gain, temp_senp_reciprocal;
+	u32 temp_senn_gain, temp_senn_reciprocal;
+	int soc_p_delta, soc_n_delta;
+	int r;
+
+	temp_senp_gain = (old_ntarget & 0x00F00000) >> 20;
+	temp_senn_gain = (old_ntarget & 0x000F0000) >> 16;
+	temp_senp_reciprocal = (old_ntarget & 0x0000FF00) >> 8;
+	temp_senn_reciprocal = old_ntarget & 0x000000FF;
+
+	soc_p_delta = PDELTA_3430;
+	soc_n_delta = NDELTA_3430;
+
+	r = recalc_with_margin(add_uv, soc_n_delta,
+			&temp_senn_reciprocal, &temp_senn_gain);
+	if (r) {
+		pr_err("%s: unable to add %ld uV to ntarget 0x%08x\n",
+			__func__, add_uv, old_ntarget);
+		return r;
+	}
+	r = recalc_with_margin(add_uv, soc_p_delta,
+			&temp_senp_reciprocal, &temp_senp_gain);
+	if (r) {
+	    pr_err("%s: unable to add %ld uV to ntarget 0x%08x\n",
+			__func__, add_uv, old_ntarget);
+		return r;
+	}
+
+	/* Populate the new modified nTarget */
+	return (temp_senp_gain << 20) | (temp_senn_gain << 16) |
+			(temp_senp_reciprocal << 8) | temp_senn_reciprocal;
+
+}
+
+static u32 calculate_freq_efuse_value(u32 opp0efuse,u32 opp1efuse,u32 freq)
+{
+	u32 sen_nrn, sen_ngain, sen_prn, sen_pgain;
+	u32 opp0efuse_adj = sr_ntarget_add_margin(opp0efuse,freq>S250M?SR_NVALUE_ADJUST_HIGHOPP:SR_NVALUE_ADJUST_LOWOPP);
+	u32 opp1efuse_adj = sr_ntarget_add_margin(opp1efuse,freq>S250M?SR_NVALUE_ADJUST_HIGHOPP:SR_NVALUE_ADJUST_LOWOPP);
+
+	freq/=1000000;
+	cal_reciprocal(get_padj_for_freq(opp0efuse_adj,opp1efuse_adj,freq), &sen_pgain, &sen_prn);
+	cal_reciprocal(get_nadj_for_freq(opp0efuse_adj,opp1efuse_adj,freq), &sen_ngain, &sen_nrn);
+
+	return (sen_pgain << 0x14) | (sen_ngain << 0x10)
+	| (sen_prn << 0x08) | (sen_nrn);
+}
+
 static void sr_set_efuse_nvalues(struct omap_sr *sr)
 {
 	if (sr->srid == SR1) {
+		u32 opp0efuse = omap_ctrl_readl(OMAP343X_CONTROL_FUSE_OPP1_VDD1);
+		u32 opp1efuse = omap_ctrl_readl(OMAP343X_CONTROL_FUSE_OPP2_VDD1);
+		
 		sr->senn_mod = (omap_ctrl_readl(OMAP343X_CONTROL_FUSE_SR) &
 					OMAP343X_SR1_SENNENABLE_MASK) >>
 					OMAP343X_SR1_SENNENABLE_SHIFT;
 		sr->senp_mod = (omap_ctrl_readl(OMAP343X_CONTROL_FUSE_SR) &
 					OMAP343X_SR1_SENPENABLE_MASK) >>
 					OMAP343X_SR1_SENPENABLE_SHIFT;
-
-		sr->opp5_nvalue = omap_ctrl_readl(
-					OMAP343X_CONTROL_FUSE_OPP5_VDD1);
-		sr->opp4_nvalue = omap_ctrl_readl(
-					OMAP343X_CONTROL_FUSE_OPP4_VDD1);
-		sr->opp3_nvalue = omap_ctrl_readl(
-					OMAP343X_CONTROL_FUSE_OPP3_VDD1);
-		sr->opp2_nvalue = omap_ctrl_readl(
-					OMAP343X_CONTROL_FUSE_OPP2_VDD1);
-		sr->opp1_nvalue = omap_ctrl_readl(
-					OMAP343X_CONTROL_FUSE_OPP1_VDD1);
+		
+		sr->opp1_nvalue = calculate_freq_efuse_value(opp0efuse,opp1efuse,S125M);
+		sr->opp2_nvalue = calculate_freq_efuse_value(opp0efuse,opp1efuse,S250M);
+		sr->opp3_nvalue = calculate_freq_efuse_value(opp0efuse,opp1efuse,S500M);
+		sr->opp4_nvalue = calculate_freq_efuse_value(opp0efuse,opp1efuse,S550M);
+		sr->opp5_nvalue = calculate_freq_efuse_value(opp0efuse,opp1efuse,S600M);
+		sr->opp6_nvalue = calculate_freq_efuse_value(opp0efuse,opp1efuse,S720M);
+		sr->opp7_nvalue = calculate_freq_efuse_value(opp0efuse,opp1efuse,S805M);
+		sr->opp8_nvalue = calculate_freq_efuse_value(opp0efuse,opp1efuse,S850M);
+		sr->opp9_nvalue = calculate_freq_efuse_value(opp0efuse,opp1efuse,S900M);
 	} else if (sr->srid == SR2) {
 		sr->senn_mod = (omap_ctrl_readl(OMAP343X_CONTROL_FUSE_SR) &
 					OMAP343X_SR2_SENNENABLE_MASK) >>
@@ -262,6 +429,14 @@ static void sr_set_testing_nvalues(struct omap_sr *sr)
 		sr->opp3_nvalue = cal_test_nvalue(0x85b + 0x200, 0x655 + 0x200);
 		sr->opp2_nvalue = cal_test_nvalue(0x506 + 0x1a0, 0x3be + 0x1a0);
 		sr->opp1_nvalue = cal_test_nvalue(0x373 + 0x100, 0x28c + 0x100);
+		sr->opp6_nvalue = calculate_freq_efuse_value(sr->opp1_nvalue,sr->opp2_nvalue,
+							     mpu_opps[VDD1_OPP6].rate/1000000);
+		sr->opp7_nvalue = calculate_freq_efuse_value(sr->opp1_nvalue,sr->opp2_nvalue,
+							     mpu_opps[VDD1_OPP7].rate/1000000);
+		sr->opp8_nvalue = calculate_freq_efuse_value(sr->opp1_nvalue,sr->opp2_nvalue,
+							     mpu_opps[VDD1_OPP8].rate/1000000);
+		sr->opp9_nvalue = calculate_freq_efuse_value(sr->opp1_nvalue,sr->opp2_nvalue,
+							     mpu_opps[VDD1_OPP9].rate/1000000);
 	} else if (sr->srid == SR2) {
 		sr->senp_mod = 0x03;
 		sr->senn_mod = 0x03;
@@ -426,7 +601,7 @@ static void sr_configure(struct omap_sr *sr)
 	sr->is_sr_reset = 0;
 }
 
-static int sr_reset_voltage(int srid)
+static int sr_reset_voltage(int srid,u32 curr_opp_no)
 {
 	u32 target_opp_no, vsel = 0;
 	u32 reg_addr = 0;
@@ -443,6 +618,14 @@ static int sr_reset_voltage(int srid)
 		reg_addr = R_VDD1_SR_CONTROL;
 		prm_vp1_voltage = prm_read_mod_reg(OMAP3430_GR_MOD,
 						OMAP3_PRM_VP1_VOLTAGE_OFFSET);
+		/* Store current calibrated voltage to be used next time preventing
+		 * overvoltage when calibration cycle  starts. if cur_opp_no is 0 don't
+		 * store current voltage, we've been called from sram_idle().
+		 * Just in case add 2 to it, so we can start a little higher next time
+		 */
+		if(curr_opp_no)
+			mpu_opps[curr_opp_no].vsel = min((u32)mpu_opps[curr_opp_no].vsel,
+							  prm_vp1_voltage+2);
 		t2_smps_steps = abs(vsel - prm_vp1_voltage);
 		errorgain = (target_opp_no > SR_MAX_LOW_OPP) ?
 			PRM_VP1_CONFIG_ERRORGAIN_HIGHOPP :
@@ -507,13 +690,24 @@ static int sr_enable(struct omap_sr *sr, u32 target_opp_no)
 {
 	u32 nvalue_reciprocal, v;
 	u8 errminlimit;
-
 	BUG_ON(!(mpu_opps && l3_opps));
 
 	sr->req_opp_no = target_opp_no;
 
 	if (sr->srid == SR1) {
-		switch (min(target_opp_no-1,5)) {
+		switch (min(target_opp_no,(u32)PRCM_NO_VDD1_OPPS)) {
+		case 9:
+			nvalue_reciprocal = sr->opp9_nvalue;
+			break;
+		case 8:
+			nvalue_reciprocal = sr->opp8_nvalue;
+			break;
+		case 7:
+			nvalue_reciprocal = sr->opp7_nvalue;
+			break;
+		case 6:
+			nvalue_reciprocal = sr->opp6_nvalue;
+			break;
 		case 5:
 			nvalue_reciprocal = sr->opp5_nvalue;
 			break;
@@ -531,8 +725,23 @@ static int sr_enable(struct omap_sr *sr, u32 target_opp_no)
 			nvalue_reciprocal = sr->opp1_nvalue;
 			break;
 		default:
-			nvalue_reciprocal = sr->opp3_nvalue;
+			nvalue_reciprocal = sr->opp9_nvalue;
 			break;
+		}
+		/* give more juice when DSP is active and overclocked */
+		if(omap_pm_dsp_get_min_opp() > VDD1_OPP1 && dsp_opps[target_opp_no].rate > S430M)
+		{
+			/* DSP is active and overclocked, boost voltage based on overclocking percent
+			   and target OPP
+			 */
+			u32 dsp_volt_boost = ((dsp_opps[target_opp_no].rate-S430M)/1000000) *
+					      atomic_read(&sr_vdd1_dsp_boost_coeff) *
+					      (VDD1_OPP9-target_opp_no);
+			dsp_volt_boost = dsp_volt_boost > SR_NVALUE_DSP_MAX_ADJUST ? SR_NVALUE_DSP_MAX_ADJUST : dsp_volt_boost;
+			nvalue_reciprocal = sr_ntarget_add_margin(nvalue_reciprocal,dsp_volt_boost);
+			mpu_opps[target_opp_no].vsel += (dsp_volt_boost/12500);
+			mpu_opps[target_opp_no].vsel = mpu_opps[target_opp_no].vsel > (PRM_VP1_VLIMITTO_VDDMAX >> 24) ?
+				PRM_VP1_VLIMITTO_VDDMAX >> 24 : mpu_opps[target_opp_no].vsel;
 		}
 	} else {
 		switch (target_opp_no) {
@@ -556,7 +765,6 @@ static int sr_enable(struct omap_sr *sr, u32 target_opp_no)
 								target_opp_no);
 		return SR_FALSE;
 	}
-
 	sr_write_reg(sr, NVALUERECIPROCAL, nvalue_reciprocal);
 
 	/* Enable the interrupt */
@@ -772,7 +980,7 @@ void sr_start_vddautocomap(int srid, u32 target_opp_no)
 }
 EXPORT_SYMBOL(sr_start_vddautocomap);
 
-int sr_stop_vddautocomap(int srid)
+int sr_stop_vddautocomap(int srid,u32 cur_opp_no)
 {
 	struct omap_sr *sr = NULL;
 
@@ -789,7 +997,7 @@ int sr_stop_vddautocomap(int srid)
 		sr_clk_disable(sr);
 		sr->is_autocomp_active = 0;
 		/* Reset the volatage for current OPP */
-		sr_reset_voltage(srid);
+		sr_reset_voltage(srid,cur_opp_no);
 		return SR_TRUE;
 	} else
 		return SR_FALSE;
@@ -823,7 +1031,7 @@ void enable_smartreflex(int srid)
 	}
 }
 
-void disable_smartreflex(int srid)
+void disable_smartreflex(int srid,u32 cur_opp_no)
 {
 	struct omap_sr *sr = NULL;
 
@@ -843,7 +1051,7 @@ void disable_smartreflex(int srid)
 			/* Disable SR clk */
 			sr_clk_disable(sr);
 			/* Reset the volatage for current OPP */
-			sr_reset_voltage(srid);
+			sr_reset_voltage(srid,cur_opp_no);
 		}
 	}
 }
@@ -953,22 +1161,22 @@ static ssize_t omap_sr_vdd1_autocomp_store(struct kobject *kobj,
 					const char *buf, size_t n)
 {
 	unsigned short value;
-
+	u32 current_vdd1opp_no;
 	if (sscanf(buf, "%hu", &value) != 1 || (value > 1)) {
 		printk(KERN_ERR "sr_vdd1_autocomp: Invalid value\n");
 		return -EINVAL;
 	}
 
 	mutex_lock(&dvfs_mutex);
+	current_vdd1opp_no = resource_get_level("vdd1_opp");
+	if (IS_ERR_VALUE(current_vdd1opp_no)) {
+		mutex_unlock(&dvfs_mutex);
+		return -ENODEV;
+	}
 
 	if (value == 0) {
-		sr_stop_vddautocomap(SR1);
+		sr_stop_vddautocomap(SR1,current_vdd1opp_no);
 	} else {
-		u32 current_vdd1opp_no = resource_get_level("vdd1_opp");
-		if (IS_ERR_VALUE(current_vdd1opp_no)) {
-			mutex_unlock(&dvfs_mutex);
-			return -ENODEV;
-		}
 		sr_start_vddautocomap(SR1, current_vdd1opp_no);
 	}
 
@@ -1008,9 +1216,13 @@ static ssize_t omap_sr_vdd2_autocomp_store(struct kobject *kobj,
 	mutex_lock(&dvfs_mutex);
 
 	current_vdd2opp_no = resource_get_level("vdd2_opp");
+	if (IS_ERR_VALUE(current_vdd2opp_no)) {
+		mutex_unlock(&dvfs_mutex);
+		return -ENODEV;
+	}
 
 	if (value == 0)
-		sr_stop_vddautocomap(SR2);
+		sr_stop_vddautocomap(SR2, current_vdd2opp_no);
 	else
 		sr_start_vddautocomap(SR2, current_vdd2opp_no);
 
@@ -1028,29 +1240,127 @@ static struct kobj_attribute sr_vdd2_autocomp = {
 	.store = omap_sr_vdd2_autocomp_store,
 };
 
-static ssize_t omap_sr_opp1_efuse_show(struct kobject *kobj,
+static ssize_t omap_sr_efuse_vdd1_show(struct kobject *kobj,
 					struct kobj_attribute *attr,
 					char *buf)
 {
-	return sprintf(buf, "%08x\n%08x\n%08x\n%08x\n%08x\n", sr1.opp1_nvalue,
+	return sprintf(buf, "%08x\n%08x\n%08x\n%08x\n%08x\n%08x\n%08x\n%08x\n%08x\n",
+							sr1.opp1_nvalue,
 							sr1.opp2_nvalue,
 							sr1.opp3_nvalue,
 							sr1.opp4_nvalue,
-							sr1.opp5_nvalue);
+							sr1.opp5_nvalue,
+							sr1.opp6_nvalue,
+							sr1.opp7_nvalue,
+							sr1.opp8_nvalue,
+							sr1.opp9_nvalue
+		       );
 }
 
-static struct kobj_attribute sr_efuse = {
+static struct kobj_attribute sr_efuse_vdd1 = {
 	.attr = {
-	.name = "Efuse",
+	.name = "efuse_vdd1",
 	.mode = 0444,
 	},
-	.show = omap_sr_opp1_efuse_show,
+	.show = omap_sr_efuse_vdd1_show,
+};
+
+static ssize_t omap_sr_vdd1_voltage_show(struct kobject *kobj,
+					struct kobj_attribute *attr,
+					char *buf)
+{
+	u32 prm_vp1_voltage;
+	mutex_lock(&dvfs_mutex);
+	prm_vp1_voltage = prm_read_mod_reg(OMAP3430_GR_MOD,
+					   OMAP3_PRM_VP1_VOLTAGE_OFFSET);
+	mutex_unlock(&dvfs_mutex);
+	return sprintf(buf,"%u\n",prm_vp1_voltage);
+}
+
+static struct kobj_attribute sr_vdd1_voltage = {
+	.attr = {
+	.name = "sr_vdd1_voltage",
+	.mode = 0444,
+	},
+	.show = omap_sr_vdd1_voltage_show,
+};
+
+static ssize_t omap_sr_efuse_vdd2_show(struct kobject *kobj,
+					struct kobj_attribute *attr,
+					char *buf)
+{
+	return sprintf(buf, "%08x\n%08x\n%08x\n",	sr2.opp1_nvalue,
+							sr2.opp2_nvalue,
+							sr2.opp3_nvalue
+		       );
+}
+
+static struct kobj_attribute sr_efuse_vdd2 = {
+	.attr = {
+	.name = "efuse_vdd2",
+	.mode = 0444,
+	},
+	.show = omap_sr_efuse_vdd2_show,
+};
+
+static ssize_t omap_sr_vdd2_voltage_show(struct kobject *kobj,
+					struct kobj_attribute *attr,
+					char *buf)
+{
+	u32 prm_vp2_voltage;
+	mutex_lock(&dvfs_mutex);
+	prm_vp2_voltage = prm_read_mod_reg(OMAP3430_GR_MOD,
+					   OMAP3_PRM_VP2_VOLTAGE_OFFSET);
+	mutex_unlock(&dvfs_mutex);
+	return sprintf(buf,"%u\n",prm_vp2_voltage);
+}
+
+static struct kobj_attribute sr_vdd2_voltage = {
+	.attr = {
+	.name = "sr_vdd2_voltage",
+	.mode = 0444,
+	},
+	.show = omap_sr_vdd2_voltage_show,
+};
+
+static ssize_t omap_sr_vdd1_dsp_boost_show(struct kobject *kobj,
+					struct kobj_attribute *attr,
+					char *buf)
+{
+	return sprintf(buf,"%u\n",atomic_read(&sr_vdd1_dsp_boost_coeff));
+}
+
+static ssize_t omap_sr_vdd1_dsp_boost_store(struct kobject *kobj,
+					struct kobj_attribute *attr,
+					const char *buf, size_t n)
+{
+	u32 value;
+
+	if (sscanf(buf, "%u", &value) != 1 || (value > 250)) {
+		printk(KERN_ERR "sr_vdd1_dsp_boost: Invalid value\n");
+		return -EINVAL;
+	}
+	atomic_set(&sr_vdd1_dsp_boost_coeff,value);
+
+	return n;
+}
+
+static struct kobj_attribute sr_vdd1_dsp_boost = {
+	.attr = {
+	.name = __stringify(sr_vdd1_dsp_boost),
+	.mode = 0644,
+	},
+	.show = omap_sr_vdd1_dsp_boost_show,
+	.store = omap_sr_vdd1_dsp_boost_store,
 };
 
 static int __init omap3_sr_init(void)
 {
 	int ret = 0;
 	u8 RdReg;
+
+	/* Set default dsp boost value */
+	atomic_set(&sr_vdd1_dsp_boost_coeff,125);
 
 	/* Enable SR on T2 */
 	ret = twl4030_i2c_read_u8(TWL4030_MODULE_PM_RECEIVER, &RdReg,
@@ -1084,9 +1394,25 @@ static int __init omap3_sr_init(void)
 	if (ret)
 		printk(KERN_ERR "sysfs_create_file failed: %d\n", ret);
 
-	ret = sysfs_create_file(power_kobj, &sr_efuse.attr);
+	ret = sysfs_create_file(power_kobj, &sr_efuse_vdd1.attr);
 	if (ret)
-		printk(KERN_ERR "sysfs_create_file failed for OPP data: %d\n", ret);
+		printk(KERN_ERR "sysfs_create_file failed for VDD1 efuse data: %d\n", ret);
+
+	ret = sysfs_create_file(power_kobj, &sr_vdd1_voltage.attr);
+	if (ret)
+		printk(KERN_ERR "sysfs_create_file failed for VDD1 voltage data: %d\n", ret);
+
+	ret = sysfs_create_file(power_kobj, &sr_efuse_vdd2.attr);
+	if (ret)
+		printk(KERN_ERR "sysfs_create_file failed for VDD2 efuse data: %d\n", ret);
+
+	ret = sysfs_create_file(power_kobj, &sr_vdd2_voltage.attr);
+	if (ret)
+		printk(KERN_ERR "sysfs_create_file failed for VDD2 voltage data: %d\n", ret);
+
+	ret = sysfs_create_file(power_kobj, &sr_vdd1_dsp_boost.attr);
+	if (ret)
+		printk(KERN_ERR "sysfs_create_file failed: %d\n", ret);
 
 	return 0;
 }

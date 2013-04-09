@@ -107,6 +107,14 @@
 #define VDD1_OPP3	0x3
 #define VDD1_OPP4	0x4
 #define VDD1_OPP5	0x5
+#define VDD1_OPP6	0x6
+#define VDD1_OPP7	0x7
+#define VDD1_OPP8	0x8
+#define VDD1_OPP9	0x9
+#define VDD1_OPP10	0xA
+#define VDD1_OPP11	0xB
+#define VDD1_OPP12	0xC
+#define VDD1_OPP13	0xD
 
 /* VDD2 OPPS */
 #define VDD2_OPP1	0x1
@@ -114,8 +122,7 @@
 #define VDD2_OPP3	0x3
 
 #define MIN_VDD1_OPP	VDD1_OPP1
-/*#define MAX_VDD1_OPP	VDD1_OPP5*/
-#define MAX_VDD1_OPP	15
+#define MAX_VDD1_OPP	VDD1_OPP13
 #define MIN_VDD2_OPP	VDD2_OPP1
 #define MAX_VDD2_OPP	VDD2_OPP3
 

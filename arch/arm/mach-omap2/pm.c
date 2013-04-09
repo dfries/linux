@@ -44,25 +44,23 @@
 
 struct omap_opp omap3_mpu_rate_table[] = {
 	{0, 0, 0},
-	{0, 1, 0x1E},
-	/*underclocking*/
-	{S125M, 2, 0x1E},
 	/*default*/
-	{S250M, 3, 0x26},
-	{S500M, 4, 0x30},
-	{S550M, 5, 0x36},
-	{S600M, 6, 0x3C},
+	{S125M, VDD1_OPP1,  0x1E},
+	{S250M, VDD1_OPP2,  0x26},
+	{S500M, VDD1_OPP3,  0x30},
+	{S550M, VDD1_OPP4,  0x36},
+	{S600M, VDD1_OPP5,  0x3C},
 	/*overclocking*/
-	{S700M, 7, 0x3C},
-	{S750M, 8, 0x3C},
-	{S805M, 9, 0x3C},
-	{S850M, 10, 0x3C},
-	{S900M, 11, 0x3C},
-	{S950M, 12, 0x3C},
-	{S1000M, 13, 0x3C},
-	{S1100M, 14, 0x48},
-	{S1150M, 15, 0x48},
+	{S720M, VDD1_OPP6,  0x3C},
+	{S805M, VDD1_OPP7,  0x3C},
+	{S850M, VDD1_OPP8,  0x3C},
+	{S900M, VDD1_OPP9,  0x3C},
+	{S950M, VDD1_OPP10, 0x3C},
+	{S1000M,VDD1_OPP11, 0x3C},
+	{S1100M,VDD1_OPP12, 0x48},
+	{S1150M,VDD1_OPP13, 0x48},
 };
+EXPORT_SYMBOL(omap3_mpu_rate_table);
 
 struct omap_opp omap3_l3_rate_table[] = {
 	{0, 0, 0},
@@ -76,25 +74,23 @@ struct omap_opp omap3_l3_rate_table[] = {
 
 struct omap_opp omap3_dsp_rate_table[] = {
 	{0, 0, 0},
-	/*underclocking*/
-	{S90M,  1, 0x1E},
 	/*default*/
-	{S90M,  2, 0x1E},
-	{S180M, 3, 0x26},
-	{S360M, 4, 0x30},
-	{S400M, 5, 0x36},
-	{S430M, 6, 0x3C},
+	{S90M,  VDD1_OPP1,  0x1E},
+	{S180M, VDD1_OPP2,  0x26},
+	{S360M, VDD1_OPP3,  0x30},
+	{S400M, VDD1_OPP4,  0x36},
+	{S430M, VDD1_OPP5,  0x3C},
 	/*overclocking*/
-	{S430M, 7, 0x3C},
-	{S430M, 8, 0x3C},
-	{S430M, 9, 0x3C},/*800MHz*/
-	{S500M, 10, 0x3C},
-	{S500M, 11, 0x3C},
-	{S500M, 12, 0x3C},
-	{S500M, 13, 0x3C},
-	{S520M, 14, 0x48},
-	{S520M, 15, 0x48},
+	{S520M, VDD1_OPP6,  0x3C},
+	{S520M, VDD1_OPP7,  0x3C},
+	{S520M, VDD1_OPP8,  0x3C},
+	{S520M, VDD1_OPP9,  0x3C},
+	{S520M, VDD1_OPP10, 0x3C},
+	{S520M, VDD1_OPP11, 0x3C},
+	{S520M, VDD1_OPP12, 0x48},
+	{S520M, VDD1_OPP13, 0x48},
 };
+EXPORT_SYMBOL(omap3_dsp_rate_table);
 
 unsigned short enable_dyn_sleep;
 unsigned short clocks_off_while_idle;
@@ -342,13 +338,13 @@ static ssize_t vdd_opp_store(struct kobject *kobj, struct kobj_attribute *attr,
 	}
 
 	if (attr == &vdd1_opp_attr) {
-		if (value < 1 || value > 5) {
+		if (value < MIN_VDD1_OPP || value > MAX_VDD1_OPP) {
 			printk(KERN_ERR "vdd_opp_store: Invalid value\n");
 			return -EINVAL;
 		}
 		resource_set_opp_level(PRCM_VDD1, value, flags);
 	} else if (attr == &vdd2_opp_attr) {
-		if (value < 1 || value > 3) {
+		if (value < MIN_VDD2_OPP || value > MAX_VDD2_OPP) {
 			printk(KERN_ERR "vdd_opp_store: Invalid value\n");
 			return -EINVAL;
 		}

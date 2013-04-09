@@ -282,6 +282,17 @@ void omap_pm_dsp_set_min_opp(u8 opp_id);
 #endif
 
 /**
+ * omap_pm_dsp_get_min_opp - return desired minimum OPP ID from DSP Bridge
+ *
+ * Get a minimum OPP ID for the DSP.
+ */
+#ifdef CONFIG_OMAP_PM_NONE
+static inline u8 omap_pm_dsp_get_min_opp(void) { }
+#else
+u8 omap_pm_dsp_get_min_opp(void);
+#endif
+
+/**
  * omap_pm_dsp_get_opp - report the current DSP OPP ID
  *
  * Report the current OPP for the DSP.  Since on OMAP3, the DSP and

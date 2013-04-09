@@ -629,9 +629,9 @@ void omap_sram_idle(void)
 	 * Only needed if we are going to enter retention.
 	 */
 	if (mpu_next_state < PWRDM_POWER_ON)
-		disable_smartreflex(SR1);
+		disable_smartreflex(SR1,0);
 	if (core_next_state < PWRDM_POWER_ON)
-		disable_smartreflex(SR2);
+		disable_smartreflex(SR2,0);
 
 	/* CORE */
 	if (core_next_state < PWRDM_POWER_ON) {

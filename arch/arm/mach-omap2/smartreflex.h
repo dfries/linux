@@ -63,7 +63,7 @@
 
 /* PRM_VP1_VSTEPMAX */
 #define PRM_VP1_VSTEPMAX_SMPSWAITTIMEMAX	(0x01F4 << 8)
-#define PRM_VP1_VSTEPMAX_VSTEPMAX		(0x04 << 0)
+#define PRM_VP1_VSTEPMAX_VSTEPMAX		(0x01 << 0)
 
 /* PRM_VP1_VLIMITTO */
 #define PRM_VP1_VLIMITTO_VDDMAX		(0x3C << 24)
@@ -240,7 +240,15 @@
 					ID_VDD(PRCM_VDD1) | ID_OPP_NO(0x4))
 #define PRCM_VDD1_OPP5		(OMAP(AT_3430_ES2) | OTHER_ID_TYPE(ID_OPP) | \
 					ID_VDD(PRCM_VDD1) | ID_OPP_NO(0x5))
-#define PRCM_NO_VDD1_OPPS	5
+#define PRCM_VDD1_OPP6		(OMAP(AT_3430_ES2) | OTHER_ID_TYPE(ID_OPP) | \
+					ID_VDD(PRCM_VDD1) | ID_OPP_NO(0x6))
+#define PRCM_VDD1_OPP7		(OMAP(AT_3430_ES2) | OTHER_ID_TYPE(ID_OPP) | \
+					ID_VDD(PRCM_VDD1) | ID_OPP_NO(0x7))
+#define PRCM_VDD1_OPP8		(OMAP(AT_3430_ES2) | OTHER_ID_TYPE(ID_OPP) | \
+					ID_VDD(PRCM_VDD1) | ID_OPP_NO(0x8))
+#define PRCM_VDD1_OPP9		(OMAP(AT_3430_ES2) | OTHER_ID_TYPE(ID_OPP) | \
+					ID_VDD(PRCM_VDD1) | ID_OPP_NO(0x9))
+#define PRCM_NO_VDD1_OPPS	VDD1_OPP9
 
 
 /* VDD2 OPPs */
@@ -254,7 +262,7 @@
 /* XXX: end remove/move */
 
 /* SR_MAX_LOW_OPP: the highest of the "low OPPs", 1 and 2. */
-#define SR_MAX_LOW_OPP		3
+#define SR_MAX_LOW_OPP		VDD1_OPP2
 
 /* XXX: find more appropriate place for these once DVFS is in place */
 extern u32 current_vdd1_opp;
@@ -273,10 +281,10 @@ extern u32 current_vdd2_opp;
  */
 #ifdef CONFIG_OMAP_SMARTREFLEX
 void enable_smartreflex(int srid);
-void disable_smartreflex(int srid);
+void disable_smartreflex(int srid,u32 cur_opp_no);
 int sr_voltagescale_vcbypass(u32 t_opp, u32 c_opp, u8 t_vsel, u8 c_vsel);
 void sr_start_vddautocomap(int srid, u32 target_opp_no);
-int sr_stop_vddautocomap(int srid);
+int sr_stop_vddautocomap(int srid,u32 cur_opp_no);
 #else
 static inline void enable_smartreflex(int srid) {}
 static inline void disable_smartreflex(int srid) {}

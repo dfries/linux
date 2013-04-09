@@ -36,6 +36,20 @@ struct omap_opp *l3_opps;
 #define LAT_RES_POSTAMBLE "_latency"
 #define MAX_LATENCY_RES_NAME 30
 
+atomic_t dsp_min_opp;
+/*
+ * Smartreflex module enable/disable interface.
+ * NOTE: if smartreflex is not enabled from sysfs, these functions will not
+ * do anything.
+ */
+#ifdef CONFIG_OMAP_SMARTREFLEX
+void sr_start_vddautocomap(int srid, u32 target_opp_no);
+int sr_stop_vddautocomap(int srid,u32 cur_opp_no);
+/* SR Modules */
+#define SR1		1
+#define SR2		2
+#endif
+
 /**
  * get_lat_res_name - gets the latency resource name given a power domain name
  * @pwrdm_name: Name of the power domain.
@@ -205,13 +219,29 @@ EXPORT_SYMBOL(omap_pm_dsp_get_opp_table);
 
 void omap_pm_dsp_set_min_opp(u8 opp_id)
 {
+	u8 curr_dsp_min_opp;
+	pr_debug("OMAP PM: DSP requests minimum VDD1 OPP to be %d\n", opp_id);
 	if (opp_id == 0) {
 		WARN_ON(1);
 		return;
 	}
 
-	pr_debug("OMAP PM: DSP requests minimum VDD1 OPP to be %d\n", opp_id);
+	curr_dsp_min_opp = omap_pm_dsp_get_min_opp();
+	atomic_set(&dsp_min_opp,opp_id);
+#ifdef CONFIG_OMAP_SMARTREFLEX
+	if(curr_dsp_min_opp == VDD1_OPP1 || opp_id == VDD1_OPP1)
+	{
+		/* DSP is about to be enabled/disabled, restart SR,
+		 * so DSP voltage boost to be applied or removed.
+		 * This is needed in case current OPP has DSP overclocking frequency
+		 */
+		u8 curr_opp = omap_pm_dsp_get_opp();
 
+		if(sr_stop_vddautocomap(SR1 , curr_opp))
+			sr_start_vddautocomap(SR1 , curr_opp);
+
+	}
+#endif
 	/*
 	 * For now pass a dummy_dev struct for SRF to identify the caller.
 	 * Maybe its good to have DSP pass this as an argument
@@ -220,6 +250,12 @@ void omap_pm_dsp_set_min_opp(u8 opp_id)
 	return;
 }
 EXPORT_SYMBOL(omap_pm_dsp_set_min_opp);
+
+u8 omap_pm_dsp_get_min_opp(void)
+{
+	return atomic_read(&dsp_min_opp);
+}
+EXPORT_SYMBOL(omap_pm_dsp_get_min_opp);
 
 u8 omap_pm_dsp_get_opp(void)
 {
@@ -341,6 +377,7 @@ int __init omap_pm_if_early_init(struct omap_opp *mpu_opp_table,
 	mpu_opps = mpu_opp_table;
 	dsp_opps = dsp_opp_table;
 	l3_opps = l3_opp_table;
+	atomic_set(&dsp_min_opp,VDD1_OPP1);
 	return 0;
 }
 

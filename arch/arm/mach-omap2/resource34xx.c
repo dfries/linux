@@ -279,7 +279,7 @@ static int program_opp(int res, struct omap_opp *opp, int target_level,
 
 #ifdef CONFIG_OMAP_SMARTREFLEX
 	sr_status = sr_stop_vddautocomap((get_vdd(t_opp) == PRCM_VDD1) ?
-			SR1 : SR2);
+			SR1 : SR2,opp[current_level].opp_id);
 #endif
 	for (i = 0; i < 2; i++) {
 		if (i == raise)
