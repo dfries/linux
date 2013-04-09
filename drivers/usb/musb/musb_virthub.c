@@ -169,10 +169,13 @@ static void musb_port_reset(struct musb *musb, bool do_reset)
 			musb->port1_status |= USB_PORT_STAT_HIGH_SPEED;
 			if (!(testmode & MUSB_TEST_FORCE_HS))
 				pr_err("Forced hostmode error: a high-speed device attached but not high-speed mode selected\n"); 
+			musb->hostdevice2 = "high";
 		} else {
 			if (testmode & MUSB_TEST_FORCE_HS)
 				pr_err("Forced hostmode error: a full/low-speed device attached but high-speed mode selected\n"); 
+			musb->hostdevice2 = "full/low";
 		}
+		sysfs_notify(&musb->controller->kobj, NULL, "hostdevice2");
 
 		musb->port1_status &= ~USB_PORT_STAT_RESET;
 		musb->port1_status |= USB_PORT_STAT_ENABLE

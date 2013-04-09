@@ -692,13 +692,16 @@ static int musb_proc_write(struct file *file, const char __user *buffer,
 		case 1: /* pullup indicates a full/high-speed device */
 			if (!(testmode & (MUSB_TEST_FORCE_FS | MUSB_TEST_FORCE_HS)))
 				pr_err("Forced hostmode error: a full/high-speed device attached but low-speed mode selected\n"); 
+			musb->hostdevice = "full/high";
 			break;
 		case 2: /* pullup indicates a low-speed device */
 			if (testmode & (MUSB_TEST_FORCE_FS | MUSB_TEST_FORCE_HS))
 				pr_err("Forced hostmode error: a low-speed device attached but full/high-speed mode selected\n"); 
+			musb->hostdevice = "low";
 			break;
 		default:
 			pr_err("Forced hostmode error: no device attached\n");
+			musb->hostdevice = "none";
 		}
  
 		if (!(testmode & (MUSB_TEST_FORCE_FS | MUSB_TEST_FORCE_HS)))
@@ -721,6 +724,7 @@ static int musb_proc_write(struct file *file, const char __user *buffer,
 		DBG(1, "CONNECT (%s) devctl %02x\n",
 				otg_state_string(musb), devctl);
 		}
+		sysfs_notify(&musb->controller->kobj, NULL, "hostdevice");
 		sysfs_notify(&musb->controller->kobj, NULL, "mode");
 		schedule_work(&musb->irq_work);
 		break;

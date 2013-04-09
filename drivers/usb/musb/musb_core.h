@@ -431,6 +431,9 @@ struct musb {
 
 	unsigned		power_draw;	/* current power draw, gadget only */
 
+	const char		*hostdevice;	/* type of usb host device (from musb_procfs.c) */
+	const char		*hostdevice2;	/* type of usb host device (from musb_virthub.c) */
+
 	bool			is_host;
 
 	int			a_wait_bcon;	/* VBUS timeout in msecs */

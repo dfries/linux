@@ -1962,6 +1962,24 @@ musb_amp_show(struct device *dev, struct device_attribute *attr, char *buf)
 static DEVICE_ATTR(mA, 0444, musb_amp_show, NULL);
 
 static ssize_t
+musb_hostdevice_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct musb *musb = dev_to_musb(dev);
+
+	return sprintf(buf, "%s\n", musb->hostdevice);
+}
+static DEVICE_ATTR(hostdevice, 0444, musb_hostdevice_show, NULL);
+
+static ssize_t
+musb_hostdevice2_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct musb *musb = dev_to_musb(dev);
+
+	return sprintf(buf, "%s\n", musb->hostdevice2);
+}
+static DEVICE_ATTR(hostdevice2, 0444, musb_hostdevice2_show, NULL);
+
+static ssize_t
 musb_mode_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct musb *musb = dev_to_musb(dev);
@@ -2044,6 +2062,10 @@ musb_mode_store(struct device *dev, struct device_attribute *attr,
 		status = -EINVAL;
 	mutex_unlock(&musb->mutex);
 
+	musb->hostdevice = "none";
+	musb->hostdevice2 = "none";
+	sysfs_notify(&musb->controller->kobj, NULL, "hostdevice");
+	sysfs_notify(&musb->controller->kobj, NULL, "hostdevice2");
 	sysfs_notify(&musb->controller->kobj, NULL, "mode");
 	schedule_work(&musb->irq_work);
 
@@ -2138,6 +2160,10 @@ static void musb_irq_work(struct work_struct *data)
 
 	if (musb->xceiv->state != old_state) {
 		old_state = musb->xceiv->state;
+		musb->hostdevice = "none";
+		musb->hostdevice2 = "none";
+		sysfs_notify(&musb->controller->kobj, NULL, "hostdevice");
+		sysfs_notify(&musb->controller->kobj, NULL, "hostdevice2");
 		sysfs_notify(&musb->controller->kobj, NULL, "mode");
 	}
 	if (musb->power_draw != old_ma) {
@@ -2211,6 +2237,8 @@ static void musb_free(struct musb *musb)
 	device_remove_file(musb->controller, &dev_attr_mA);
 	device_remove_file(musb->controller, &dev_attr_connect);
 	device_remove_file(musb->controller, &dev_attr_charger);
+	device_remove_file(musb->controller, &dev_attr_hostdevice);
+	device_remove_file(musb->controller, &dev_attr_hostdevice2);
 	device_remove_file(musb->controller, &dev_attr_mode);
 	device_remove_file(musb->controller, &dev_attr_vbus);
 #ifdef CONFIG_USB_GADGET_MUSB_HDRC
@@ -2316,6 +2344,8 @@ bad_config:
 	musb->set_clock = plat->set_clock;
 	musb->min_power = plat->min_power;
 	musb->use_dma = use_dma;
+	musb->hostdevice = "none";
+	musb->hostdevice2 = "none";
 
 	/* Clock usage is chip-specific ... functional clock (DaVinci,
 	 * OMAP2430), or PHY ref (some TUSB6010 boards).  All this core
@@ -2457,6 +2487,8 @@ bad_config:
 	status = device_create_file(dev, &dev_attr_mA);
 	status = device_create_file(dev, &dev_attr_connect);
 	status = device_create_file(dev, &dev_attr_charger);
+	status = device_create_file(dev, &dev_attr_hostdevice);
+	status = device_create_file(dev, &dev_attr_hostdevice2);
 	status = device_create_file(dev, &dev_attr_mode);
 	status = device_create_file(dev, &dev_attr_vbus);
 #ifdef CONFIG_USB_GADGET_MUSB_HDRC
@@ -2481,6 +2513,8 @@ fail2:
 	device_remove_file(dev, &dev_attr_mA);
 	device_remove_file(dev, &dev_attr_connect);
 	device_remove_file(dev, &dev_attr_charger);
+	device_remove_file(dev, &dev_attr_hostdevice);
+	device_remove_file(dev, &dev_attr_hostdevice2);
 	device_remove_file(musb->controller, &dev_attr_mode);
 	device_remove_file(musb->controller, &dev_attr_vbus);
 #ifdef CONFIG_USB_GADGET_MUSB_HDRC
