@@ -75,4 +75,10 @@ config BATTERY_BQ27x00
 	help
 	  Say Y here to enable support for batteries with BQ27200(I2C) chip.
 
+config CHARGER_BQ2415X
+	tristate "BQ2415X charger driver"
+	depends on I2C
+	help
+	  Say Y here to enable support for chargers with BQ2415X(I2C) chip.
+
 endif # POWER_SUPPLY

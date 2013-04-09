@@ -25,3 +25,4 @@ obj-$(CONFIG_TWL4030_BCI_BATTERY)	+= twl4030_bci_battery.o
 obj-$(CONFIG_BATTERY_TOSA)	+= tosa_battery.o
 obj-$(CONFIG_BATTERY_WM97XX)	+= wm97xx_battery.o
 obj-$(CONFIG_BATTERY_BQ27x00)	+= bq27x00_battery.o
+obj-$(CONFIG_CHARGER_BQ2415X)	+= bq2415x_charger.o
