@@ -1129,6 +1129,8 @@ struct gendisk *alloc_disk_node(int minors, int node_id)
 		disk->part_tbl->part[0] = &disk->part0;
 
 		disk->minors = minors;
+		disk->flags |= 
+			(GENHD_FL_REMAP_SWAPPED_PAGES | GENHD_FL_NOTIFY_REMAPPED_ONLY);
 		rand_initialize_disk(disk);
 		disk_to_dev(disk)->class = &block_class;
 		disk_to_dev(disk)->type = &disk_type;
