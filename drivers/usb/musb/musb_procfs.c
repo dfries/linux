@@ -721,6 +721,8 @@ static int musb_proc_write(struct file *file, const char __user *buffer,
 		DBG(1, "CONNECT (%s) devctl %02x\n",
 				otg_state_string(musb), devctl);
 		}
+		sysfs_notify(&musb->controller->kobj, NULL, "mode");
+		schedule_work(&musb->irq_work);
 		break;
 
 	case 'H':

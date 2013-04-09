@@ -2044,6 +2044,9 @@ musb_mode_store(struct device *dev, struct device_attribute *attr,
 		status = -EINVAL;
 	mutex_unlock(&musb->mutex);
 
+	sysfs_notify(&musb->controller->kobj, NULL, "mode");
+	schedule_work(&musb->irq_work);
+
 	return (status == 0) ? n : status;
 }
 static DEVICE_ATTR(mode, 0644, musb_mode_show, musb_mode_store);
