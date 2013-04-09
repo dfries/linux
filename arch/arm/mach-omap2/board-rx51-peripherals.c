@@ -572,6 +572,9 @@ static struct i2c_board_info __initdata rx51_peripherals_i2c_board_info_2[] = {
 		I2C_BOARD_INFO("tsl2563", 0x29),
 		.platform_data = &rx51_tsl2563_platform_data,
 	},
+	{
+		I2C_BOARD_INFO("bq27200", 0x55),
+	},
 };
 
 static struct i2c_board_info __initdata rx51_peripherals_i2c_board_info_3[] = {
