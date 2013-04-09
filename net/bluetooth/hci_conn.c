@@ -498,7 +498,7 @@ void hci_conn_enter_active_mode(struct hci_conn *conn)
 	if (test_bit(HCI_RAW, &hdev->flags))
 		return;
 
-	if (conn->mode != HCI_CM_SNIFF)
+	if (conn->mode != HCI_CM_SNIFF || (((conn->dev_class[1]&0x1f) == 0x05) && !conn->power_save))
 		goto timer;
 
 	if (!test_and_set_bit(HCI_CONN_MODE_CHANGE_PEND, &conn->pend)) {
