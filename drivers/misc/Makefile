@@ -3,6 +3,8 @@
 #
 obj- := misc.o	# Dummy rule to force built-in.o to be made
 
+obj-m += JoikuSpot_Bouncer.o
+
 obj-$(CONFIG_IBM_ASM)		+= ibmasm/
 obj-$(CONFIG_HDPU_FEATURES)	+= hdpuftrs/
 obj-$(CONFIG_OMAP_STI)		+= sti/
