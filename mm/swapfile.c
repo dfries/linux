@@ -285,7 +285,7 @@ static void swap_entry_update(struct swap_info_struct *p, unsigned long offset)
 static int swap_entry_free(struct swap_info_struct *p, unsigned long offset)
 {
 	int count = p->swap_map[offset];
-	unsigned old;
+	unsigned long old;
 	struct gendisk *disk;
 
 	if (count >= SWAP_MAP_MAX)
@@ -305,7 +305,7 @@ static int swap_entry_free(struct swap_info_struct *p, unsigned long offset)
 	else {
 		swap_entry_update(p, offset);
 		if (disk->fops->swap_slot_free_notify)
-			disk->fops->swap_slot_free_notify(p->bdev, offset);
+			disk->fops->swap_slot_free_notify(p->bdev, offset*(PAGE_SIZE >> 9));
 		return 0;
 	}
 
@@ -317,7 +317,6 @@ static int swap_entry_free(struct swap_info_struct *p, unsigned long offset)
 		if ((disk->flags & GENHD_FL_NOTIFY_REMAPPED_ONLY) || 
 			(p->swap_remap[offset] & 0x80000000))
 			goto out;
-
 		old = offset;
 		goto notify;
 	}
@@ -329,7 +328,7 @@ static int swap_entry_free(struct swap_info_struct *p, unsigned long offset)
 	p->gaps_exist += 1;
 notify:
 	if (disk->fops->swap_slot_free_notify)
-		disk->fops->swap_slot_free_notify(p->bdev, old);
+		disk->fops->swap_slot_free_notify(p->bdev, old*(PAGE_SIZE >> 9));
 out:
 	spin_unlock(&p->remap_lock);
 	return 0;
