@@ -60,8 +60,8 @@ static ssize_t power_supply_show_property(struct device *dev,
 
 	if (ret < 0) {
 		if (ret != -ENODEV)
-			dev_err(dev, "driver failed to report `%s' property\n",
-				attr->attr.name);
+/*			dev_err(dev, "driver failed to report `%s' property\n",
+				attr->attr.name);*/
 		return ret;
 	}
 
