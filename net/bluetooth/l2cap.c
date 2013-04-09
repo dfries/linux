@@ -400,6 +400,16 @@ static void l2cap_conn_start(struct l2cap_conn *conn)
 					struct sock *parent = bt_sk(sk)->parent;
 					rsp.result = cpu_to_le16(L2CAP_CR_PEND);
 					rsp.status = cpu_to_le16(L2CAP_CS_AUTHOR_PEND);
+					if(!parent)
+					{
+						printk(KERN_DEBUG "avoided "
+							"crash in %s parent %p "
+							"result %d status %d\n",
+							__func__, parent,
+							rsp.result, rsp.status);
+						bh_unlock_sock(sk);
+						continue;
+					}
 					parent->sk_data_ready(parent, 0);
 
 				} else {
