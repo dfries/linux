@@ -267,10 +267,16 @@ static struct platform_device rx51_lirc_device = {
 	},
 };
 
+static struct platform_device rx51_battery = {
+	.name		= "rx51-battery",
+	.id		= -1,
+};
+
 static struct platform_device *rx51_peripherals_devices[] = {
 	&rx51_smc91x_device,
 	&rx51_camera_button_device,
 	&rx51_lirc_device,
+	&rx51_battery,
 };
 
 static void __init rx51_init_smc91x(void)
