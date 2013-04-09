@@ -55,23 +55,10 @@
 static int radio_nr = -1;	/* radio device minor (-1 ==> auto assign) */
 
 /* properties lock for write operations */
-static int config_locked;
+static int config_locked = 1;
 
-/* saved power levels */
-static unsigned int max_pl;
-static unsigned int min_pl;
-
-/* structure for pid registration */
-struct pid_list {
-	pid_t pid;
-	struct list_head plist;
-};
-
-#define APP_MAX_NUM	2
-
-static int pid_count;
-static LIST_HEAD(pid_list_head);
-static struct si4713_device *si4713_dev;
+/* module param for initial power level */
+static int init_power_level = 120;
 
 /*
  * Sysfs properties
@@ -195,14 +182,12 @@ static ssize_t si4713_lock_write(struct device *dev,
 {
 	int l;
 
-	if (config_locked)
-		return -EPERM;
-
 	sscanf(buf, "%d", &l);
 
-	if (l != 0)
-		config_locked = 1;
+	if (l != 0 && l != 1)
+		return -EINVAL;
 
+	config_locked = l;
 	return count;
 }
 
@@ -219,7 +204,7 @@ static DEVICE_ATTR(lock, S_IRUGO | S_IWUSR, si4713_lock_read,
 /*
  * Power level property
  */
-/* power_level (rw) 88 - 115 or 0 */
+/* power_level (rw) 88 - 120 or 0 */
 static ssize_t si4713_power_level_write(struct device *dev,
 					struct device_attribute *attr,
 					const char *buf,
@@ -230,7 +215,7 @@ static ssize_t si4713_power_level_write(struct device *dev,
 	int rval, pl;
 
 	if (config_locked)
-		return -EPERM;
+		return count;
 
 	if (!sdev) {
 		rval = -ENODEV;
@@ -420,109 +405,13 @@ static irqreturn_t si4713_handler(int irq, void *dev)
 	return IRQ_HANDLED;
 }
 
-static int register_pid(pid_t pid)
-{
-	struct pid_list *pitem;
-
-	list_for_each_entry(pitem, &pid_list_head, plist) {
-		if (pitem->pid == pid)
-			return -EINVAL;
-	}
-
-	pitem = kmalloc(sizeof(struct pid_list), GFP_KERNEL);
-
-	if (!pitem)
-		return -ENOMEM;
-
-	pitem->pid = pid;
-
-	list_add(&(pitem->plist), &pid_list_head);
-	pid_count++;
-
-	return 0;
-}
-
-static int unregister_pid(pid_t pid)
-{
-	struct pid_list *pitem, *n;
-
-	list_for_each_entry_safe(pitem, n, &pid_list_head, plist) {
-		if (pitem->pid == pid) {
-			list_del(&(pitem->plist));
-			pid_count--;
-
-			kfree(pitem);
-
-			return 0;
-		}
-	}
-	return -EINVAL;
-}
-
 static int si4713_priv_ioctl(struct inode *inode, struct file *file,
 		unsigned int cmd, unsigned long arg)
 {
-	unsigned int pow;
-	int pl, rval;
-
 	if (cmd != LOCK_LOW_POWER && cmd != RELEASE_LOW_POWER)
 		return video_ioctl2(inode, file, cmd, arg);
-
-	pl = si4713_get_power_level(si4713_dev);
-
-	if (pl < 0) {
-		rval = pl;
-		goto exit;
-	}
-
-	if (copy_from_user(&pow, (void __user *)arg, sizeof(pow))) {
-		rval = -EFAULT;
-		goto exit;
-	}
-
-	if (cmd == LOCK_LOW_POWER) {
-
-		if (pid_count == APP_MAX_NUM) {
-			rval = -EPERM;
-			goto exit;
-		}
-
-		if (pid_count == 0) {
-			if (pow > pl) {
-				rval = -EINVAL;
-				goto exit;
-			} else {
-				/* Set max possible power level */
-				max_pl = pl;
-				min_pl = pow;
-			}
-		}
-
-		rval = register_pid(current->pid);
-
-		if (rval)
-			goto exit;
-
-		/* Lower min power level if asked */
-		if (pow < min_pl)
-			min_pl = pow;
-		else
-			pow = min_pl;
-
-	} else { /* RELEASE_LOW_POWER */
-		rval = unregister_pid(current->pid);
-
-		if (rval)
-			goto exit;
-
-		if (pid_count == 0) {
-			if (pow > max_pl)
-				pow = max_pl;
-		}
-	}
-	rval = si4713_set_power_level(si4713_dev, pow);
-exit:
-	return rval;
+	else
+		return 0;
 }
 
 /*
@@ -906,8 +795,11 @@ static int si4713_i2c_driver_probe(struct i2c_client *client,
 		goto free_sysfs;
 	}
 
-	/* save to global pointer for it to be accesible from ioctl() call */
-	si4713_dev = sdev;
+	rval = si4713_set_power_level(sdev, init_power_level);
+	if (rval < 0) {
+		dev_dbg(&client->dev, "Failed to set initial power level.\n");
+		goto free_sysfs;
+	}
 
 	return 0;
 
@@ -1012,6 +904,12 @@ module_exit(si4713_module_exit);
 module_param(radio_nr, int, 0);
 MODULE_PARM_DESC(radio_nr,
 		 "Minor number for radio device (-1 ==> auto assign)");
+
+module_param(init_power_level, int, 120);
+MODULE_PARM_DESC(init_power_level, "Initial value of power level (default 120)");
+
+module_param(config_locked, int, 1);
+MODULE_PARM_DESC(config_locked, "Lock power level configuration on init (default 1 - locked)");
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR(DRIVER_AUTHOR);
