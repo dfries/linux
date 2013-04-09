@@ -5,10 +5,10 @@
 
 #include <linux/wait.h>
 #include <linux/workqueue.h>
-#include <linux/blkdev.h>
+#include <linux/interrupt.h>
+#include <mach/mboxkfifo.h>
 
 typedef u32 mbox_msg_t;
-typedef void (mbox_receiver_t)(mbox_msg_t msg);
 struct omap_mbox;
 
 typedef int __bitwise omap_mbox_irq_t;
@@ -29,8 +29,10 @@ struct omap_mbox_ops {
 	int		(*fifo_empty)(struct omap_mbox *mbox);
 	int		(*fifo_full)(struct omap_mbox *mbox);
 	/* irq */
-	void		(*enable_irq)(struct omap_mbox *mbox, omap_mbox_irq_t irq);
-	void		(*disable_irq)(struct omap_mbox *mbox, omap_mbox_irq_t irq);
+	void		(*enable_irq)(struct omap_mbox *mbox,
+						omap_mbox_irq_t irq);
+	void		(*disable_irq)(struct omap_mbox *mbox,
+						omap_mbox_irq_t irq);
 	void		(*ack_irq)(struct omap_mbox *mbox, omap_mbox_irq_t irq);
 	int		(*is_irq)(struct omap_mbox *mbox, omap_mbox_irq_t irq);
 	/* ctx */
@@ -40,8 +42,9 @@ struct omap_mbox_ops {
 
 struct omap_mbox_queue {
 	spinlock_t		lock;
-	struct request_queue	*queue;
+	struct mbox_kfifo	fifo;
 	struct work_struct	work;
+	struct tasklet_struct	tasklet;
 	int	(*callback)(void *);
 	struct omap_mbox	*mbox;
 };
@@ -64,7 +67,7 @@ struct omap_mbox {
 	void			(*err_notify)(void);
 };
 
-int omap_mbox_msg_send(struct omap_mbox *, mbox_msg_t msg, void *);
+int omap_mbox_msg_send(struct omap_mbox *, mbox_msg_t msg);
 void omap_mbox_init_seq(struct omap_mbox *);
 
 struct omap_mbox *omap_mbox_get(const char *);
@@ -91,6 +94,18 @@ static inline void omap_mbox_restore_ctx(struct omap_mbox *mbox)
 	}
 
 	mbox->ops->restore_ctx(mbox);
+}
+
+static inline void omap_mbox_enable_irq(struct omap_mbox *mbox,
+					omap_mbox_irq_t irq)
+{
+	mbox->ops->enable_irq(mbox, irq);
+}
+
+static inline void omap_mbox_disable_irq(struct omap_mbox *mbox,
+					 omap_mbox_irq_t irq)
+{
+	mbox->ops->disable_irq(mbox, irq);
 }
 
 #endif /* MAILBOX_H */

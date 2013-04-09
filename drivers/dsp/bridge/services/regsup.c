@@ -3,6 +3,8 @@
  *
  * DSP-BIOS Bridge driver support functions for TI OMAP processors.
  *
+ * Provide registry support functions.
+ *
  * Copyright (C) 2005-2006 Texas Instruments, Inc.
  *
  * This package is free software; you can redistribute it and/or modify
@@ -14,20 +16,6 @@
  * WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-
-/*
- *  ======== regsup.c ========
- *  Purpose:
- *      Provide registry support functions.
- *
- *! Revision History:
- *! ================
- *! 28-May-2002  map: Integrated PSI's dspimage update mechanism
- *! 11-May-2002  gp:  Turned PERF "on".
- *! 21-May-2002  map: Fixed bug in SetValue - if resizing datasize, set
- *!		      new size too
- */
-
 /*  ----------------------------------- Host OS */
 #include <dspbridge/host_os.h>
 
@@ -35,336 +23,223 @@
 #include <dspbridge/std.h>
 #include <dspbridge/dbdefs.h>
 #include <dspbridge/errbase.h>
-#include <dspbridge/dbreg.h>
 
 /*  ----------------------------------- Trace & Debug */
 #include <dspbridge/dbc.h>
-#include <dspbridge/gt.h>
 
 /*  ----------------------------------- OS Adaptation Layer */
 #include <dspbridge/mem.h>
-#include <dspbridge/csl.h>
+#include <dspbridge/list.h>
 
 /*  ----------------------------------- This */
 #include <regsup.h>
 
-struct RegValueStruct {
-	char name[BRIDGE_MAX_NAME_SIZE];   /*  Name of a given value entry  */
-	u32 dataSize;		/*  Size of the data  */
-	void *pData;		/*  Pointer to the actual data  */
+struct reg_value {
+	struct list_head link;	/* Make it linked to a list */
+	char name[MAXREGPATHLENGTH];	/*  Name of a given value entry */
+	u32 data_size;		/*  Size of the data */
+	void *pdata;		/*  Pointer to the actual data */
 };
 
-struct RegKeyStruct {
-	/*The current number of value entries this key has*/
-	u32 numValueEntries;
-	/* Array of value entries */
-	struct RegValueStruct values[BRIDGE_MAX_NUM_REG_ENTRIES];
-};
-
-
-/*  Pointer to the registry support key  */
-static struct RegKeyStruct *pRegKey;
-
-#if GT_TRACE
-extern struct GT_Mask REG_debugMask;	/* GT trace var. */
-/*
- *  ======== printS ========
- *  Purpose:
- *      Displays printable characters in pBuf, if any.
- */
-static inline void printS(void *pBuf)
-{
-	int pos = 0;
-	if (*(REG_debugMask).flags & (GT_2CLASS)) {
-		while (*(u8 *)((pBuf)+pos) >= ' ' &&
-		       *(u8 *)((pBuf)+pos) <= '~') {
-			GT_1trace(REG_debugMask, GT_2CLASS, "%c",
-					*(u8 *)((pBuf) + pos++));
-		}
-
-		GT_0trace(REG_debugMask, GT_2CLASS, "\n");
-	}
-}
-#else
-#define printS(pBuf)
-#endif
+/*  Pointer to the registry support key */
+static struct lst_list reg_key, *reg_key_list = &reg_key;
 
 /*
- *  ======== regsupInit ========
+ *  ======== regsup_init ========
  *  Purpose:
  *      Initialize the Registry Support module's private state.
  */
-bool regsupInit(void)
+bool regsup_init(void)
 {
-	if (pRegKey != NULL)
-		return true;
-
-	/*  Need to allocate and setup our registry.  */
-	pRegKey = MEM_Calloc(sizeof(struct RegKeyStruct), MEM_NONPAGED);
-	if (pRegKey == NULL)
-		return false;
-
+	INIT_LIST_HEAD(&reg_key_list->head);
 	return true;
 }
 
 /*
- *  ======== regsupExit ========
+ *  ======== regsup_exit ========
  *  Purpose:
  *      Release all registry support allocations.
  */
-void regsupExit(void)
+void regsup_exit(void)
 {
-	u32 i;
+	struct reg_value *rv;
+	/*  Now go through each entry and free all resources. */
+	while (!LST_IS_EMPTY(reg_key_list)) {
+		rv = (struct reg_value *)lst_get_head(reg_key_list);
 
-	/*  Make sure data has actually been allocated.  */
-	if (pRegKey == NULL) {
-		/*  Nothing initialized.return!  */
-		return;
+		kfree(rv->pdata);
+		kfree(rv);
 	}
-
-	GT_1trace(REG_debugMask, GT_2CLASS, "pRegKey->numValueEntries %d\n",
-		  pRegKey->numValueEntries);
-
-	/*  Now go through each entry and free all resources.  */
-	for (i = 0; ((i < BRIDGE_MAX_NUM_REG_ENTRIES) &&
-	    (i < pRegKey->numValueEntries)); i++) {
-		if (pRegKey->values[i].name[0] != '\0') {
-			/*  We have a valid entry.free it up!  */
-			if (pRegKey->values[i].pData != NULL) {
-				GT_3trace(REG_debugMask, GT_2CLASS,
-					  "E %d\t %s DATA %x ", i,
-					  pRegKey->values[i].name,
-					  *(u32 *)pRegKey->values[i].pData);
-				printS((u8 *)(pRegKey->values[i].pData));
-				MEM_Free(pRegKey->values[i].pData);
-			}
-			pRegKey->values[i].pData = NULL;
-			pRegKey->values[i].dataSize = 0;
-			pRegKey->values[i].name[0] = '\0';
-		}
-	}
-
-	/*  Now that all of the resources are freed up, free the main one!  */
-	MEM_Free(pRegKey);
-
-	/*  Don't forget to NULL out the global entry!  */
-	pRegKey = NULL;
 }
 
 /*
- *  ======== regsupGetValue ========
+ *  ======== regsup_get_value ========
  *  Purpose:
  *      Get the value of the entry having the given name.
  */
-DSP_STATUS regsupGetValue(char *valName, void *pBuf, u32 *dataSize)
+dsp_status regsup_get_value(char *valName, void *pbuf, u32 * data_size)
 {
-	DSP_STATUS retVal = DSP_EFAIL;
-	u32 i;
+	dsp_status ret = DSP_EFAIL;
+	struct reg_value *rv = (struct reg_value *)lst_first(reg_key_list);
 
-	/*  Need to search through the entries looking for the right one.  */
-	for (i = 0; i < pRegKey->numValueEntries; i++) {
-		/*  See if the name matches.  */
-               if (strncmp(pRegKey->values[i].name, valName,
-		    BRIDGE_MAX_NAME_SIZE) == 0) {
+	/*  Need to search through the entries looking for the right one. */
+	while (rv) {
+		/*  See if the name matches. */
+		if (strncmp(rv->name, valName, MAXREGPATHLENGTH) == 0) {
+			/*  We have a match!  Copy out the data. */
+			memcpy(pbuf, rv->pdata, rv->data_size);
 
-			/*  We have a match!  Copy out the data.  */
-			memcpy(pBuf, pRegKey->values[i].pData,
-			       pRegKey->values[i].dataSize);
+			/*  Get the size for the caller. */
+			*data_size = rv->data_size;
 
-			/*  Get the size for the caller.  */
-			*dataSize = pRegKey->values[i].dataSize;
-
-			/*  Set our status to good and exit.  */
-			retVal = DSP_SOK;
+			/*  Set our status to good and exit. */
+			ret = DSP_SOK;
 			break;
 		}
+		rv = (struct reg_value *)lst_next(reg_key_list,
+						  (struct list_head *)rv);
 	}
 
-	if (DSP_SUCCEEDED(retVal)) {
-		GT_2trace(REG_debugMask, GT_2CLASS, "G %s DATA %x ", valName,
-			  *(u32 *)pBuf);
-		printS((u8 *)pBuf);
-	} else {
-		GT_1trace(REG_debugMask, GT_3CLASS, "G %s FAILED\n", valName);
-	}
+	dev_dbg(bridge, "REG: get %s, status = 0x%x\n", valName, ret);
 
-	return retVal;
+	return ret;
 }
 
 /*
- *  ======== regsupSetValue ========
+ *  ======== regsup_set_value ========
  *  Purpose:
  *      Sets the value of the entry having the given name.
  */
-DSP_STATUS regsupSetValue(char *valName, void *pBuf, u32 dataSize)
+dsp_status regsup_set_value(char *valName, void *pbuf, u32 data_size)
 {
-	DSP_STATUS retVal = DSP_EFAIL;
-	u32 i;
+	dsp_status ret = DSP_EFAIL;
+	struct reg_value *rv = (struct reg_value *)lst_first(reg_key_list);
 
-	GT_2trace(REG_debugMask, GT_2CLASS, "S %s DATA %x ", valName,
-		  *(u32 *)pBuf);
-	printS((u8 *)pBuf);
-
-	/*  Need to search through the entries looking for the right one.  */
-	for (i = 0; i < pRegKey->numValueEntries; i++) {
-		/*  See if the name matches.  */
-               if (strncmp(pRegKey->values[i].name, valName,
-		    BRIDGE_MAX_NAME_SIZE) == 0) {
-			/*  Make sure the new data size is the same.  */
-			if (dataSize != pRegKey->values[i].dataSize) {
-				/*  The caller needs a different data size!  */
-				MEM_Free(pRegKey->values[i].pData);
-				pRegKey->values[i].pData = MEM_Alloc(dataSize,
-							   MEM_NONPAGED);
-				if (pRegKey->values[i].pData == NULL)
+	/*  Need to search through the entries looking for the right one. */
+	while (rv) {
+		/*  See if the name matches. */
+		if (strncmp(rv->name, valName, MAXREGPATHLENGTH) == 0) {
+			/*  Make sure the new data size is the same. */
+			if (data_size != rv->data_size) {
+				/*  The caller needs a different data size! */
+				kfree(rv->pdata);
+				rv->pdata = mem_alloc(data_size, MEM_NONPAGED);
+				if (rv->pdata == NULL)
 					break;
-
 			}
 
-			/*  We have a match!  Copy out the data.  */
-			memcpy(pRegKey->values[i].pData, pBuf, dataSize);
+			/*  We have a match!  Copy out the data. */
+			memcpy(rv->pdata, pbuf, data_size);
 
 			/* Reset datasize - overwrite if new or same */
-			pRegKey->values[i].dataSize = dataSize;
+			rv->data_size = data_size;
 
-			/*  Set our status to good and exit.  */
-			retVal = DSP_SOK;
+			/*  Set our status to good and exit. */
+			ret = DSP_SOK;
 			break;
 		}
+		rv = (struct reg_value *)lst_next(reg_key_list,
+						  (struct list_head *)rv);
 	}
 
-	/*  See if we found a match or if this is a new entry  */
-	if (i == pRegKey->numValueEntries) {
-		/*  No match, need to make a new entry  */
-		/*  First check to see if we can make any more entries.  */
-		if (pRegKey->numValueEntries < BRIDGE_MAX_NUM_REG_ENTRIES) {
-			char *tmp_name =
-				pRegKey->values[pRegKey->numValueEntries].name;
-			strncpy(tmp_name, valName, BRIDGE_MAX_NAME_SIZE - 1);
-			tmp_name[BRIDGE_MAX_NAME_SIZE - 1] = '\0';
-			pRegKey->values[pRegKey->numValueEntries].pData =
-					MEM_Alloc(dataSize, MEM_NONPAGED);
-			if (pRegKey->values[pRegKey->numValueEntries].pData !=
-									NULL) {
-				memcpy(pRegKey->
-					values[pRegKey->numValueEntries].pData,
-					pBuf, dataSize);
-				pRegKey->
-				    values[pRegKey->numValueEntries].dataSize =
-				    dataSize;
-				pRegKey->numValueEntries++;
-				retVal = DSP_SOK;
-			}
-		} else {
-			GT_0trace(REG_debugMask, GT_7CLASS,
-				  "MAX NUM REG ENTRIES REACHED\n");
+	/*  See if we found a match or if this is a new entry */
+	if (!rv) {
+		/*  No match, need to make a new entry */
+		struct reg_value *new = mem_calloc(sizeof(struct reg_value),
+						   MEM_NONPAGED);
+
+		strncat(new->name, valName, MAXREGPATHLENGTH - 1);
+		new->pdata = mem_alloc(data_size, MEM_NONPAGED);
+		if (new->pdata != NULL) {
+			memcpy(new->pdata, pbuf, data_size);
+			new->data_size = data_size;
+			lst_put_tail(reg_key_list, (struct list_head *)new);
+			ret = DSP_SOK;
 		}
 	}
 
-	return retVal;
+	dev_dbg(bridge, "REG: set %s, status = 0x%x", valName, ret);
+
+	return ret;
 }
 
 /*
- *  ======== regsupEnumValue ========
+ *  ======== regsup_enum_value ========
  *  Purpose:
  *      Returns registry "values" and their "data" under a (sub)key.
  */
-DSP_STATUS regsupEnumValue(IN u32 dwIndex, IN CONST char *pstrKey,
-			   IN OUT char *pstrValue, IN OUT u32 *pdwValueSize,
-			   IN OUT char *pstrData, IN OUT u32 *pdwDataSize)
+dsp_status regsup_enum_value(IN u32 dw_index, IN CONST char *pstrKey,
+			     IN OUT char *pstrValue, IN OUT u32 * pdwValueSize,
+			     IN OUT char *pstrData, IN OUT u32 * pdwDataSize)
 {
-	DSP_STATUS retVal = REG_E_INVALIDSUBKEY;
-	u32 i;
-       u32 dwKeyLen;
+	dsp_status ret = REG_E_INVALIDSUBKEY;
+	struct reg_value *rv = (struct reg_value *)lst_first(reg_key_list);
+	u32 dw_key_len;
 	u32 count = 0;
 
-       DBC_Require(pstrKey);
-       dwKeyLen = strlen(pstrKey);
+	DBC_REQUIRE(pstrKey);
+	dw_key_len = strlen(pstrKey);
 
-	/*  Need to search through the entries looking for the right one.  */
-	for (i = 0; i < pRegKey->numValueEntries; i++) {
-		/*  See if the name matches.  */
-               if ((strncmp(pRegKey->values[i].name, pstrKey,
-		    dwKeyLen) == 0) && count++ == dwIndex) {
-			/*  We have a match!  Copy out the data.  */
-			memcpy(pstrData, pRegKey->values[i].pData,
-				pRegKey->values[i].dataSize);
-			/*  Get the size for the caller.  */
-			*pdwDataSize = pRegKey->values[i].dataSize;
-                       *pdwValueSize = strlen(&(pRegKey->
-						values[i].name[dwKeyLen]));
-                       strncpy(pstrValue,
-				    &(pRegKey->values[i].name[dwKeyLen]),
-				    *pdwValueSize + 1);
-			GT_3trace(REG_debugMask, GT_2CLASS,
-				  "E Key %s, Value %s, Data %x ",
-				  pstrKey, pstrValue, *(u32 *)pstrData);
-			printS((u8 *)pstrData);
-			/*  Set our status to good and exit.  */
-			retVal = DSP_SOK;
+	/*  Need to search through the entries looking for the right one. */
+	while (rv) {
+		/*  See if the name matches. */
+		if (strncmp(rv->name, pstrKey, dw_key_len) == 0 &&
+		    count++ == dw_index) {
+			/*  We have a match!  Copy out the data. */
+			memcpy(pstrData, rv->pdata, rv->data_size);
+			/*  Get the size for the caller. */
+			*pdwDataSize = rv->data_size;
+			*pdwValueSize = strlen(&(rv->name[dw_key_len]));
+			strncpy(pstrValue, &(rv->name[dw_key_len]),
+				*pdwValueSize + 1);
+			/*  Set our status to good and exit. */
+			ret = DSP_SOK;
 			break;
 		}
+		rv = (struct reg_value *)lst_next(reg_key_list,
+						  (struct list_head *)rv);
 	}
 
-	if (count && DSP_FAILED(retVal))
-		retVal = REG_E_NOMOREITEMS;
+	if (count && DSP_FAILED(ret))
+		ret = REG_E_NOMOREITEMS;
 
-	return retVal;
+	dev_dbg(bridge, "REG: enum Key %s, Value %s, status = 0x%x",
+		pstrKey, pstrValue, ret);
+
+	return ret;
 }
 
 /*
- *  ======== regsupDeleteValue ========
+ *  ======== regsup_delete_value ========
  */
-DSP_STATUS regsupDeleteValue(IN CONST char *pstrSubkey,
-			    IN CONST char *pstrValue)
+dsp_status regsup_delete_value(IN CONST char *pstrValue)
 {
-	DSP_STATUS retVal = DSP_EFAIL;
-	u32 i;
+	dsp_status ret = DSP_EFAIL;
+	struct reg_value *rv = (struct reg_value *)lst_first(reg_key_list);
 
-	for (i = 0; ((i < BRIDGE_MAX_NUM_REG_ENTRIES) &&
-	    (i < pRegKey->numValueEntries)); i++) {
-		/*  See if the name matches...  */
-               if (strncmp(pRegKey->values[i].name, pstrValue,
-		    BRIDGE_MAX_NAME_SIZE) == 0) {
+	while (rv) {
+		/*  See if the name matches. */
+		if (strncmp(rv->name, pstrValue, MAXREGPATHLENGTH) == 0) {
 			/* We have a match!  Delete this key.  To delete a
 			 * key, we free all resources associated with this
 			 * key and, if we're not already the last entry in
 			 * the array, we copy that entry into this deleted
 			 * key.
 			 */
-			MEM_Free(pRegKey->values[i].pData);
-			if ((pRegKey->numValueEntries - 1) == i) {
-				/* we're deleting the last one */
-				pRegKey->values[i].name[0] = '\0';
-				pRegKey->values[i].dataSize = 0;
-				pRegKey->values[i].pData = NULL;
-			} else {
-				/* move the last one here */
-                               strncpy(pRegKey->values[i].name, pRegKey->
-				    values[pRegKey->numValueEntries - 1].name,
-				    BRIDGE_MAX_NAME_SIZE);
-				pRegKey->values[i].dataSize =
-				    pRegKey->
-				    values[pRegKey->numValueEntries-1].dataSize;
-				pRegKey->values[i].pData =
-				    pRegKey->
-				    values[pRegKey->numValueEntries-1].pData;
-				/* don't have to do this, but for
-				 * the paranoid... */
-				pRegKey->
-				    values[pRegKey->numValueEntries-1].name[0] =
-				    '\0';
-			}
+			lst_remove_elem(reg_key_list, (struct list_head *)rv);
+			kfree(rv->pdata);
+			kfree(rv);
 
-			/* another one bites the dust. */
-			pRegKey->numValueEntries--;
-
-			/*  Set our status to good and exit...  */
-			retVal = DSP_SOK;
+			/*  Set our status to good and exit... */
+			ret = DSP_SOK;
 			break;
 		}
+		rv = (struct reg_value *)lst_next(reg_key_list,
+						  (struct list_head *)rv);
 	}
-	return retVal;
+
+	dev_dbg(bridge, "REG: del %s, status = 0x%x", pstrValue, ret);
+
+	return ret;
 
 }
-

@@ -3,6 +3,8 @@
  *
  * DSP-BIOS Bridge driver support functions for TI OMAP processors.
  *
+ * Provide registry functions.
+ *
  * Copyright (C) 2005-2006 Texas Instruments, Inc.
  *
  * This package is free software; you can redistribute it and/or modify
@@ -12,25 +14,6 @@
  * THIS PACKAGE IS PROVIDED ``AS IS'' AND WITHOUT ANY EXPRESS OR
  * IMPLIED WARRANTIES, INCLUDING, WITHOUT LIMITATION, THE IMPLIED
  * WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
- */
-
-
-/*
- *  ======== regce.c ========
- *  Purpose:
- *      Provide registry functions.
- *
- *  Public Functions:
- *      REG_DeleteValue
- *      REG_EnumValue
- *      REG_Exit
- *      REG_GetValue
- *      REG_Init
- *      REG_SetValue
- *
- *! Revision History:
- *! ================
- *
  */
 
 /*  ----------------------------------- Host OS */
@@ -43,107 +26,78 @@
 
 /*  ----------------------------------- Trace & Debug */
 #include <dspbridge/dbc.h>
-#include <dspbridge/gt.h>
 
 /*  ----------------------------------- OS Adaptation Layer */
-#include <dspbridge/csl.h>
 #include <dspbridge/mem.h>
-
-/*  ----------------------------------- Others */
-#include <dspbridge/dbreg.h>
 
 /*  ----------------------------------- This */
 #include <dspbridge/reg.h>
 #include <regsup.h>
 
-#if GT_TRACE
-struct GT_Mask REG_debugMask = { NULL, NULL };	/* GT trace var. */
-#endif
-
 /*
- *  ======== REG_DeleteValue ========
+ *  ======== reg_delete_value ========
  *  Deletes a registry entry value.  NOTE:  A registry entry value is not the
  *  same as *  a registry key.
  */
-DSP_STATUS REG_DeleteValue(OPTIONAL IN HANDLE *phKey, IN CONST char *pstrSubkey,
-			   IN CONST char *pstrValue)
+dsp_status reg_delete_value(IN CONST char *pstrValue)
 {
-	DSP_STATUS status;
-	DBC_Require(pstrSubkey && pstrValue);
-	DBC_Require(phKey == NULL);
-       DBC_Require(strlen(pstrSubkey) < REG_MAXREGPATHLENGTH);
-       DBC_Require(strlen(pstrValue) < REG_MAXREGPATHLENGTH);
+	dsp_status status;
+	DBC_REQUIRE(strlen(pstrValue) < REG_MAXREGPATHLENGTH);
 
-	GT_0trace(REG_debugMask, GT_ENTER, "REG_DeleteValue: entered\n");
-
-	/*  Note that we don't use phKey */
-	if (regsupDeleteValue(pstrSubkey, pstrValue) == DSP_SOK)
-		status = DSP_SOK;
-	else
-		status = DSP_EFAIL;
+	status = regsup_delete_value(pstrValue);
 
 	return status;
 }
 
 /*
- *  ======== REG_EnumValue ========
+ *  ======== reg_enum_value ========
  *  Enumerates a registry key and retrieve values stored under the key.
  *  We will assume the input pdwValueSize is smaller than
  *  REG_MAXREGPATHLENGTH for implementation purposes.
  */
-DSP_STATUS REG_EnumValue(IN HANDLE *phKey, IN u32 dwIndex,
-			 IN CONST char *pstrKey, IN OUT char *pstrValue,
-			 IN OUT u32 *pdwValueSize, IN OUT char *pstrData,
-			 IN OUT u32 *pdwDataSize)
+dsp_status reg_enum_value(IN u32 dw_index,
+			  IN CONST char *pstrKey, IN OUT char *pstrValue,
+			  IN OUT u32 *pdwValueSize, IN OUT char *pstrData,
+			  IN OUT u32 *pdwDataSize)
 {
-	DSP_STATUS status;
+	dsp_status status;
 
-	DBC_Require(pstrKey && pstrValue && pdwValueSize && pstrData &&
+	DBC_REQUIRE(pstrKey && pstrValue && pdwValueSize && pstrData &&
 		    pdwDataSize);
-	DBC_Require(*pdwValueSize <= REG_MAXREGPATHLENGTH);
-	DBC_Require(phKey == NULL);
-       DBC_Require(strlen(pstrKey) < REG_MAXREGPATHLENGTH);
+	DBC_REQUIRE(*pdwValueSize <= REG_MAXREGPATHLENGTH);
+	DBC_REQUIRE(strlen(pstrKey) < REG_MAXREGPATHLENGTH);
 
-	GT_0trace(REG_debugMask, GT_ENTER, "REG_EnumValue: entered\n");
-
-	status = regsupEnumValue(dwIndex, pstrKey, pstrValue, pdwValueSize,
-				 pstrData, pdwDataSize);
+	status = regsup_enum_value(dw_index, pstrKey, pstrValue, pdwValueSize,
+				   pstrData, pdwDataSize);
 
 	return status;
 }
 
 /*
- *  ======== REG_Exit ========
+ *  ======== reg_exit ========
  *  Discontinue usage of the REG module.
  */
-void REG_Exit(void)
+void reg_exit(void)
 {
-	GT_0trace(REG_debugMask, GT_5CLASS, "REG_Exit\n");
-
-	regsupExit();
+	regsup_exit();
 }
 
 /*
- *  ======== REG_GetValue ========
+ *  ======== reg_get_value ========
  *  Retrieve a value from the registry.
  */
-DSP_STATUS REG_GetValue(OPTIONAL IN HANDLE *phKey, IN CONST char *pstrSubkey,
-			IN CONST char *pstrValue, OUT u8 *pbData,
-			IN OUT u32 *pdwDataSize)
+dsp_status reg_get_value(IN CONST char *pstrValue, OUT u8 * pbData,
+			 IN OUT u32 *pdwDataSize)
 {
-	DSP_STATUS status;
+	dsp_status status;
 
-	DBC_Require(pstrSubkey && pstrValue && pbData);
-	DBC_Require(phKey == NULL);
-       DBC_Require(strlen(pstrSubkey) < REG_MAXREGPATHLENGTH);
-       DBC_Require(strlen(pstrValue) < REG_MAXREGPATHLENGTH);
+	DBC_REQUIRE(pstrValue && pbData);
+	DBC_REQUIRE(strlen(pstrValue) < REG_MAXREGPATHLENGTH);
 
-	GT_0trace(REG_debugMask, GT_ENTER, "REG_GetValue: entered\n");
-
-	/*  We need to use regsup calls...  */
-	/*  ...for now we don't need the key handle or  */
-	/*  the subkey, all we need is the value to lookup.  */
-	if (regsupGetValue((char *)pstrValue, pbData, pdwDataSize) == DSP_SOK)
+	/*  We need to use regsup calls... */
+	/*  ...for now we don't need the key handle or */
+	/*  the subkey, all we need is the value to lookup. */
+	if (regsup_get_value((char *)pstrValue, pbData, pdwDataSize) == DSP_SOK)
 		status = DSP_SOK;
 	else
 		status = DSP_EFAIL;
@@ -152,45 +106,37 @@ DSP_STATUS REG_GetValue(OPTIONAL IN HANDLE *phKey, IN CONST char *pstrSubkey,
 }
 
 /*
- *  ======== REG_Init ========
+ *  ======== reg_init ========
  *  Initialize the REG module's private state.
  */
-bool REG_Init(void)
+bool reg_init(void)
 {
-	bool fInit;
+	bool ret;
 
-	GT_create(&REG_debugMask, "RG");	/* RG for ReG */
+	ret = regsup_init();
 
-	fInit = regsupInit();
-
-	GT_0trace(REG_debugMask, GT_5CLASS, "REG_Init\n");
-
-	return fInit;
+	return ret;
 }
 
 /*
- *  ======== REG_SetValue ========
+ *  ======== reg_set_value ========
  *  Set a value in the registry.
  */
-DSP_STATUS REG_SetValue(OPTIONAL IN HANDLE *phKey, IN CONST char *pstrSubkey,
-			IN CONST char *pstrValue, IN CONST u32 dwType,
-			IN u8 *pbData, IN u32 dwDataSize)
+dsp_status reg_set_value(IN CONST char *pstrValue, IN u8 * pbData,
+			 IN u32 dw_data_size)
 {
-	DSP_STATUS status;
+	dsp_status status;
 
-	DBC_Require(pstrValue && pbData);
-	DBC_Require(phKey == NULL);
-	DBC_Require(dwDataSize > 0);
-       DBC_Require(strlen(pstrValue) < REG_MAXREGPATHLENGTH);
+	DBC_REQUIRE(pstrValue && pbData);
+	DBC_REQUIRE(dw_data_size > 0);
+	DBC_REQUIRE(strlen(pstrValue) < REG_MAXREGPATHLENGTH);
 
-	/*  We need to use regsup calls...  */
-	/*  ...for now we don't need the key handle or  */
-	/*  the subkey, all we need is the value to lookup.  */
-	if (regsupSetValue((char *)pstrValue, pbData, dwDataSize) == DSP_SOK)
-		status = DSP_SOK;
-	else
-		status = DSP_EFAIL;
+	/*
+	 * We need to use regsup calls
+	 * for now we don't need the key handle or
+	 * the subkey, all we need is the value to lookup.
+	 */
+	status = regsup_set_value((char *)pstrValue, pbData, dw_data_size);
 
 	return status;
 }
-

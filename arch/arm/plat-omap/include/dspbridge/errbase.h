@@ -3,6 +3,14 @@
  *
  * DSP-BIOS Bridge driver support functions for TI OMAP processors.
  *
+ * Central repository for DSP/BIOS Bridge error and status code.
+ *
+ * Error codes are of the form:
+ *     [<MODULE>]_E<ERRORCODE>
+ *
+ * Success codes are of the form:
+ *     [<MODULE>]_S<SUCCESSCODE>
+ *
  * Copyright (C) 2008 Texas Instruments, Inc.
  *
  * This package is free software; you can redistribute it and/or modify
@@ -14,44 +22,15 @@
  * WARRANTIES OF MERCHANTIBILITY AND FITNESS FOR A PARTICULAR PURPOSE.
  */
 
-/*
- *  ======== errbase.h ========
- *  Description:
- *      Central repository for DSP/BIOS Bridge error and status code.
- *
- *  Error codes are of the form:
- *      [<MODULE>]_E<ERRORCODE>
- *
- *  Success codes are of the form:
- *      [<MODULE>]_S<SUCCESSCODE>
- *
- *! Revision History:
- *! ================
- *! 24-Jan-2003 map Added DSP_SALREADYLOADED for persistent library checking
- *! 23-Nov-2002 gp: Minor comment cleanup.
- *! 13-May-2002 sg  Added DSP_SALREADYASLEEP and DSP_SALREADYWAKE.
- *! 18-Feb-2002 mk: Added DSP_EOVERLAYMEMORY, EFWRITE, ENOSECT.
- *! 31-Jan-2002 mk: Added definitions of DSP_STRUE and DSP_SFALSE.
- *! 29-Jan-2002 mk: Added definition of CFG_E_INSUFFICIENTBUFSIZE.
- *! 24-Oct-2001 sp: Consolidated all the error codes into this file.
- *! 24-Jul-2001 mk: Type-casted all definitions of WSX_STATUS types for
- *!                 removal of compile warnings.
- *! 22-Nov-1999 kc: Changes from code review.
- *! 18-Aug-1999 rr: Ported From WSX.
- *! 29-May-1996 gp: Removed WCD_ and WMD_ error ranges. Redefined format of
- *!                 error codes.
- *! 10-May-1996 gp: Created.
- */
-
 #ifndef ERRBASE_
 #define ERRBASE_
 
 /* Base of generic errors and component errors */
-#define DSP_SBASE               (DSP_STATUS)0x00008000
-#define DSP_EBASE               (DSP_STATUS)0x80008000
+#define DSP_SBASE               (dsp_status)0x00008000
+#define DSP_EBASE               (dsp_status)0x80008000
 
-#define DSP_COMP_EBASE          (DSP_STATUS)0x80040200
-#define DSP_COMP_ELAST          (DSP_STATUS)0x80047fff
+#define DSP_COMP_EBASE          (dsp_status)0x80040200
+#define DSP_COMP_ELAST          (dsp_status)0x80047fff
 
 /* SUCCESS Codes */
 
@@ -183,7 +162,7 @@
  * found in the COFF file. */
 #define DSP_ESYMBOL                 (DSP_EBASE + 0x1c)
 
-/* UUID not found in registry.  */
+/* UUID not found in registry. */
 #define DSP_EUUID                   (DSP_EBASE + 0x1d)
 
 /* Unable to read content of DCD data section ; this is typically caused by
@@ -221,7 +200,7 @@
 /* Multiple instances are not allowed. */
 #define DSP_EMULINST                (DSP_EBASE + 0x2c)
 
-/* A specified entity was not found.  */
+/* A specified entity was not found. */
 #define DSP_ENOTFOUND               (DSP_EBASE + 0x2d)
 
 /* A DSP I/O resource is not available. */
@@ -291,7 +270,7 @@
 /* The mini-driver expected a newer version of the class driver. */
 #define DEV_E_NEWWMD                (DEV_EBASE + 0x00)
 
-/* WMD_DRV_Entry function returned a NULL function interface table. */
+/* bridge_drv_entry function returned a NULL function interface table. */
 #define DEV_E_NULLWMDINTF           (DEV_EBASE + 0x01)
 
 /* FAILURE Codes : LDR */
@@ -323,21 +302,6 @@
 
 /* Insufficient buffer size */
 #define CFG_E_INSUFFICIENTBUFSIZE   (CFG_EBASE + 0x05)
-
-/* FAILURE Codes : BRD */
-#define BRD_EBASE                   (DSP_COMP_EBASE + 0x300)
-
-/* Board client does not have sufficient access rights for this operation. */
-#define BRD_E_ACCESSDENIED          (BRD_EBASE + 0x00)
-
-/* Unable to find trace buffer symbols in the DSP executable COFF file. */
-#define BRD_E_NOTRACEBUFFER         (BRD_EBASE + 0x01)
-
-/* Attempted to auto-start board, but no default DSP executable configured. */
-#define BRD_E_NOEXEC                (BRD_EBASE + 0x02)
-
-/* The operation failed because it was started from a wrong state */
-#define BRD_E_WRONGSTATE            (BRD_EBASE + 0x03)
 
 /* FAILURE Codes : COD */
 #define COD_EBASE                   (DSP_COMP_EBASE + 0x400)
@@ -431,7 +395,7 @@
 /* Wait for flush operation on an output channel timed out. */
 #define CHNL_E_WAITTIMEOUT          (CHNL_EBASE + 0x15)
 
-/* User supplied hEvent must be specified with pstrEventName attribute */
+/* User supplied event_obj must be specified with pstr_event_name attribute */
 #define CHNL_E_BADUSEREVENT         (CHNL_EBASE + 0x16)
 
 /* Illegal user event name specified */
@@ -479,31 +443,4 @@
 /* Insufficient space to hold data in registry value. */
 #define REG_E_MOREDATA              (REG_EBASE + 0x03)
 
-/* FAILURE Codes : KFILE */
-#define KFILE_EBASE                 (DSP_COMP_EBASE + 0x900)
-
-/* Invalid file handle. */
-#define E_KFILE_INVALIDHANDLE       (KFILE_EBASE + 0x01)
-
-/* Bad file name. */
-#define E_KFILE_BADFILENAME         (KFILE_EBASE + 0x02)
-
-/* Invalid file mode. */
-#define E_KFILE_INVALIDMODE         (KFILE_EBASE + 0x03)
-
-/* No resources available. */
-#define E_KFILE_NORESOURCES         (KFILE_EBASE + 0x04)
-
-/* Invalid file buffer        . */
-#define E_KFILE_INVALIDBUFFER       (KFILE_EBASE + 0x05)
-
-/* Bad origin argument. */
-#define E_KFILE_BADORIGINFLAG       (KFILE_EBASE + 0x06)
-
-/* Invalid file offset value. */
-#define E_KFILE_INVALIDOFFSET       (KFILE_EBASE + 0x07)
-
-/* General KFILE error condition */
-#define E_KFILE_ERROR               (KFILE_EBASE + 0x08)
-
-#endif				/* ERRBASE_ */
+#endif /* ERRBASE_ */
