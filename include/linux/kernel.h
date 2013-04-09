@@ -191,6 +191,8 @@ extern int kernel_text_address(unsigned long addr);
 struct pid;
 extern struct pid *session_of_pgrp(struct pid *pgrp);
 
+#define kstrtol strict_strtol
+
 /*
  * FW_BUG
  * Add this to a message where you are sure the firmware is buggy or behaves
