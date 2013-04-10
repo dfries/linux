@@ -762,7 +762,8 @@ static void omap_hsmmc_protect_card(struct omap_hsmmc_host *host)
 	} else {
 		if (!host->protect_card) {
 			printk(KERN_INFO "%s: cover is open, "
-					 "card is now inaccessible\n",
+					 "card (would have been) "
+					 "is now inaccessible\n",
 					 mmc_hostname(host->mmc));
 			host->protect_card = 1;
 		}
@@ -1020,6 +1021,7 @@ static void omap_hsmmc_request(struct mmc_host *mmc, struct mmc_request *req)
 		 * it can be removed.
 		 */
 		if (host->protect_card) {
+#if 0
 			if (host->reqs_blocked < 3) {
 				u32 reg;
 
@@ -1043,6 +1045,7 @@ static void omap_hsmmc_request(struct mmc_host *mmc, struct mmc_request *req)
 			enable_irq(host->irq);
 			mmc_request_done(mmc, req);
 			return;
+#endif
 		} else if (host->reqs_blocked)
 			host->reqs_blocked = 0;
 	}
