@@ -517,14 +517,13 @@ static void twl4030_phy_suspend(struct twl4030_usb *twl, int controller_off)
 	struct musb *musb = musb_restore_ctx_and_resume_ptr && twl->otg.gadget ?
 		gadget_to_musb(twl->otg.gadget) : NULL;
 
-	if (twl->asleep)
-		return;
-
 	if(musb)
 		mutex_lock(&musb->mutex);
 
-	twl4030_phy_power(twl, 0);
-	twl->asleep = 1;
+	if (!twl->asleep) {
+		twl4030_phy_power(twl, 0);
+		twl->asleep = 1;
+	}
 
 	if(musb)
 		mutex_unlock(&musb->mutex);
@@ -538,18 +537,17 @@ static void twl4030_phy_resume(struct twl4030_usb *twl)
 	struct musb *musb = musb_restore_ctx_and_resume_ptr && twl->otg.gadget ?
 		gadget_to_musb(twl->otg.gadget) : NULL;
 
-	if (!twl->asleep)
-		return;
-
 	if(musb)
 		mutex_lock(&musb->mutex);
 
-	twl4030_phy_power(twl, 1);
-	twl4030_i2c_access(twl, 1);
-	twl4030_usb_set_mode(twl, twl->usb_mode);
-	if (twl->usb_mode == T2_USB_MODE_ULPI)
-		twl4030_i2c_access(twl, 0);
-	twl->asleep = 0;
+	if (twl->asleep) {
+		twl4030_phy_power(twl, 1);
+		twl4030_i2c_access(twl, 1);
+		twl4030_usb_set_mode(twl, twl->usb_mode);
+		if (twl->usb_mode == T2_USB_MODE_ULPI)
+			twl4030_i2c_access(twl, 0);
+		twl->asleep = 0;
+	}
 
 	if(musb)
 		mutex_unlock(&musb->mutex);
