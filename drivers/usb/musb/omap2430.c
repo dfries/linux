@@ -463,10 +463,11 @@ void musb_save_ctx_and_suspend(struct usb_gadget *gadget, int overwrite)
 	l &= ~AUTOIDLE;
 	omap_writel(l, OTG_SYSCONFIG);
 
-	musb->is_charger = 0;
-
-	if (machine_is_nokia_rx51() && rx51_with_charger_detection())
-		rx51_set_wallcharger(0);
+	if(musb->is_charger) {
+		musb->is_charger = 0;
+		if (machine_is_nokia_rx51() && rx51_with_charger_detection())
+			rx51_set_wallcharger(0);
+	}
 
 	/* clear constraints */
 	if (musb->board && musb->board->set_pm_limits)
