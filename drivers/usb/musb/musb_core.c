@@ -322,10 +322,6 @@ static int musb_charger_detect(struct musb *musb)
 		mutex_unlock(&musb->mutex);
 		otg_set_suspend(musb->xceiv, 1);
 		mutex_lock(&musb->mutex);
-
-		musb->is_charger = 1;
-		if (machine_is_nokia_rx51() && rx51_with_charger_detection())
-			rx51_set_wallcharger(1);
 	} else {
 		/* enable interrupts */
 		musb_writeb(musb->mregs, MUSB_INTRUSBE, ctx.intrusbe);
@@ -337,6 +333,14 @@ static int musb_charger_detect(struct musb *musb)
 		msleep(10);
 		musb_writeb(musb->mregs, MUSB_POWER,
 				r & ~MUSB_POWER_RESUME);
+	}
+
+	if(musb->is_charger != vdat) {
+		musb->is_charger = vdat;
+		if (machine_is_nokia_rx51() && rx51_with_charger_detection())
+			rx51_set_wallcharger(vdat);
+		printk(KERN_DEBUG "%s is_charger now %d\n",
+			__func__, musb->is_charger);
 	}
 
 	check_charger = 0;
