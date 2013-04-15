@@ -236,7 +236,7 @@ static int musb_charger_detect(struct musb *musb)
 	 * change it unless you really know what you're doing
 	 */
 
-	DBG(4, "Some asshole called musb_charger_detect!");
+	DBG(4, "musb_charger_detect xceive->state %u\n", musb->xceiv->state);
 
 	switch(musb->xceiv->state) {
 		case OTG_STATE_B_IDLE:
